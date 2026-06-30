@@ -37,7 +37,7 @@ button {
   padding: 28px 0 48px;
 }
 
-.screamer-67 {
+.screamer {
   position: fixed;
   inset: 0;
   z-index: 9999;
@@ -50,7 +50,7 @@ button {
   pointer-events: none;
 }
 
-.screamer-67-picture {
+.screamer-picture {
   display: grid;
   place-items: center;
   width: min(82vw, 720px);
@@ -62,9 +62,10 @@ button {
   box-shadow: 0 0 80px rgba(255, 255, 255, 0.34), 0 28px 90px rgba(0, 0, 0, 0.52);
   transform: rotate(-2deg);
   animation: screamerPop 520ms cubic-bezier(0.2, 1.35, 0.36, 1) both;
+  overflow: hidden;
 }
 
-.screamer-67-picture span {
+.screamer-number {
   color: #fff;
   font-size: clamp(120px, 32vw, 360px);
   font-weight: 1000;
@@ -72,6 +73,34 @@ button {
   text-shadow:
     0 8px 0 #111,
     0 0 34px rgba(0, 0, 0, 0.5);
+}
+
+.screamer-ronaldo .screamer-picture {
+  grid-template-rows: minmax(0, 1fr) auto;
+  width: min(88vw, 620px);
+  aspect-ratio: 4 / 5;
+  border-color: #f3d150;
+  background: #111;
+}
+
+.screamer-ronaldo img {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  object-fit: cover;
+}
+
+.screamer-message {
+  width: 100%;
+  padding: 18px 20px 20px;
+  color: #fff;
+  background: linear-gradient(135deg, #0b6f44, #c8212f);
+  font-size: clamp(24px, 5vw, 48px);
+  font-weight: 1000;
+  line-height: 1;
+  text-align: center;
+  text-transform: uppercase;
+  text-shadow: 0 3px 0 #111;
 }
 
 @keyframes screamerPop {

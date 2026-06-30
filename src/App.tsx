@@ -61,7 +61,7 @@ type SavedGame = {
 const COIN_BUDGET = 15000;
 const MIN_COUNTRIES = 3;
 const MAX_COUNTRIES = 5;
-const SCREAMER_INTERVAL_MS = 40_000;
+const SCREAMER_INTERVAL_MS = 60_000;
 const SCREAMER_DURATION_MS = 5_000;
 const LINE_REQUIREMENTS: Record<Line, number> = {
   GK: 3,
@@ -924,13 +924,24 @@ const MUSIC_SOURCES: Record<MusicTrack, string> = {
   celebration: '/sounds/celebration.ogg',
 };
 
-function Screamer67({ visible }: { visible: boolean }) {
-  if (!visible) return null;
+type ScreamerKind = 'sixtySeven' | 'ronaldo';
+
+function Screamer({ kind }: { kind: ScreamerKind | null }) {
+  if (!kind) return null;
 
   return (
-    <div className="screamer-67" role="presentation" aria-hidden="true">
-      <div className="screamer-67-picture">
-        <span>67</span>
+    <div className={`screamer screamer-${kind}`} role="presentation" aria-hidden="true">
+      <div className="screamer-picture">
+        {kind === 'sixtySeven' ? (
+          <span className="screamer-number">67</span>
+        ) : (
+          <>
+            <img src="/images/ronaldo-2018.jpg" alt="" />
+            <span className="screamer-message">
+              Ronaldo please win the World Cup 2026
+            </span>
+          </>
+        )}
       </div>
     </div>
   );
@@ -1033,7 +1044,8 @@ export default function App() {
   const [saving, setSaving] = useState(false);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [leaderboardError, setLeaderboardError] = useState('');
-  const [showScreamer67, setShowScreamer67] = useState(false);
+  const [screamerKind, setScreamerKind] = useState<ScreamerKind | null>(null);
+  const screamerTurnRef = useRef<ScreamerKind>('sixtySeven');
 
   const qualifiedCountries = WORLD_CUPS[year];
   const availableCountries = edition === 'worldCup'
@@ -1078,8 +1090,10 @@ export default function App() {
 
   useEffect(() => {
     const triggerScreamer = () => {
-      setShowScreamer67(true);
-      window.setTimeout(() => setShowScreamer67(false), SCREAMER_DURATION_MS);
+      const nextKind = screamerTurnRef.current;
+      screamerTurnRef.current = nextKind === 'sixtySeven' ? 'ronaldo' : 'sixtySeven';
+      setScreamerKind(nextKind);
+      window.setTimeout(() => setScreamerKind(null), SCREAMER_DURATION_MS);
     };
 
     const intervalId = window.setInterval(triggerScreamer, SCREAMER_INTERVAL_MS);
@@ -1465,7 +1479,7 @@ export default function App() {
   if (!profile) {
     return (
       <>
-        <Screamer67 visible={showScreamer67} />
+        <Screamer kind={screamerKind} />
         <main className="app-shell auth-shell">
           <section className="auth-card">
           <p className="eyebrow">World Cup squad lab</p>
@@ -1533,7 +1547,7 @@ export default function App() {
 
   return (
     <>
-      <Screamer67 visible={showScreamer67} />
+      <Screamer kind={screamerKind} />
       <main className={`app-shell theme-${year}`} style={themeStyle}>
       <section className="hero">
         {selectedLogo && <img className="hero-logo" src={selectedLogo} alt="" />}
