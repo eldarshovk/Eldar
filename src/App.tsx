@@ -914,30 +914,41 @@ function squadRead(selectedPlayers: Player[], lang: Lang) {
 
 const MUSIC_TRACKS: MusicTrack[] = ['anthem', 'drums', 'chant', 'celebration'];
 
-function useQuietFootballLoop(enabled: boolean, track: MusicTrack) {
+function useQuietFootballLoop(initialTrack: MusicTrack) {
+  const [musicOn, setMusicOn] = useState(false);
+  const [musicTrack, setMusicTrack] = useState<MusicTrack>(initialTrack);
   const audioRef = useRef<AudioContext | null>(null);
-  const intervalRef = useRef<number | null>(null);
+  const masterRef = useRef<GainNode | null>(null);
+  const timeoutRef = useRef<number | null>(null);
+  const trackRef = useRef<MusicTrack>(initialTrack);
+  const playingRef = useRef(false);
 
-  useEffect(() => {
-    if (!enabled) {
-      if (intervalRef.current !== null) {
-        window.clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-      void audioRef.current?.close();
-      audioRef.current = null;
-      return;
-    }
-
+  function ensureAudio() {
+    if (audioRef.current && masterRef.current) return audioRef.current;
     const AudioContextClass = window.AudioContext
       || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioContextClass) return;
+    if (!AudioContextClass) return null;
 
     const audio = new AudioContextClass();
     const master = audio.createGain();
     master.gain.value = 0.045;
     master.connect(audio.destination);
     audioRef.current = audio;
+    masterRef.current = master;
+    return audio;
+  }
+
+  function clearLoop() {
+    if (timeoutRef.current !== null) {
+      window.clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+  }
+
+  function playPattern(track: MusicTrack) {
+    const audio = audioRef.current;
+    const master = masterRef.current;
+    if (!audio || !master || !playingRef.current) return;
 
     const playTone = (
       time: number,
@@ -959,13 +970,13 @@ function useQuietFootballLoop(enabled: boolean, track: MusicTrack) {
       oscillator.stop(time + duration + 0.04);
     };
 
-    const playKick = (time: number) => {
+    const playKick = (time: number, volume = 0.09) => {
       const oscillator = audio.createOscillator();
       const gain = audio.createGain();
       oscillator.type = 'triangle';
       oscillator.frequency.setValueAtTime(95, time);
       oscillator.frequency.exponentialRampToValueAtTime(45, time + 0.16);
-      gain.gain.setValueAtTime(0.09, time);
+      gain.gain.setValueAtTime(volume, time);
       gain.gain.exponentialRampToValueAtTime(0.001, time + 0.18);
       oscillator.connect(gain);
       gain.connect(master);
@@ -973,54 +984,126 @@ function useQuietFootballLoop(enabled: boolean, track: MusicTrack) {
       oscillator.stop(time + 0.22);
     };
 
+    const playClap = (time: number) => {
+      [620, 760, 920].forEach((frequency, index) => {
+        playTone(time + index * 0.012, frequency, 0.055, 0.012, 'square');
+      });
+    };
+
     const patterns: Record<MusicTrack, () => void> = {
       anthem: () => {
         const start = audio.currentTime + 0.05;
-        [392, 440, 494, 440, 392, 330].forEach((note, index) => {
-          playTone(start + index * 0.32, note, 0.28, 0.026, 'sine');
+        [392, 440, 494, 587, 494, 440, 392, 330].forEach((note, index) => {
+          playTone(start + index * 0.25, note, 0.22, 0.032, 'sine');
         });
-        playKick(start);
+        [196, 220, 247, 294].forEach((note, index) => {
+          playTone(start + index * 0.5, note, 0.44, 0.012, 'triangle');
+        });
+        playKick(start, 0.055);
         playKick(start + 1);
       },
       drums: () => {
         const start = audio.currentTime + 0.05;
-        [0, 0.34, 0.68, 1.02, 1.36].forEach((offset) => playKick(start + offset));
-        [0.17, 0.51, 0.85, 1.19].forEach((offset) => playTone(start + offset, 190, 0.08, 0.018, 'square'));
+        [0, 0.28, 0.56, 0.84, 1.12, 1.4].forEach((offset) => playKick(start + offset, 0.105));
+        [0.14, 0.42, 0.7, 0.98, 1.26, 1.54].forEach((offset) => {
+          playTone(start + offset, 155, 0.07, 0.022, 'square');
+        });
+        [0.21, 0.77, 1.33].forEach((offset) => playClap(start + offset));
       },
       chant: () => {
         const start = audio.currentTime + 0.05;
-        [0, 0.3, 0.6, 1.05, 1.35].forEach((offset, index) => {
-          playTone(start + offset, index % 2 === 0 ? 330 : 392, 0.24, 0.028, 'triangle');
+        [0, 0.26, 0.52, 0.96, 1.22, 1.48].forEach((offset, index) => {
+          playTone(start + offset, index % 2 === 0 ? 262 : 330, 0.2, 0.032, 'sawtooth');
+          playTone(start + offset, index % 2 === 0 ? 196 : 247, 0.2, 0.018, 'triangle');
         });
-        playKick(start + 0.9);
+        [0.78, 1.7].forEach((offset) => playClap(start + offset));
+        playKick(start + 0.88, 0.06);
       },
       celebration: () => {
         const start = audio.currentTime + 0.05;
-        [523, 659, 784, 659, 784, 880].forEach((note, index) => {
-          playTone(start + index * 0.22, note, 0.18, 0.024, 'sine');
+        [523, 659, 784, 1047, 880, 1047, 1175, 1319].forEach((note, index) => {
+          playTone(start + index * 0.16, note, 0.14, 0.03, 'sine');
+          playTone(start + index * 0.16, note / 2, 0.13, 0.012, 'triangle');
         });
-        [0, 0.44, 0.88].forEach((offset) => playKick(start + offset));
+        [0, 0.32, 0.64, 0.96, 1.28].forEach((offset) => playKick(start + offset, 0.07));
+        [0.24, 0.56, 0.88, 1.2, 1.52].forEach((offset) => playClap(start + offset));
       },
     };
 
-    const loop = () => {
-      const start = audio.currentTime + 0.05;
-      patterns[track]();
-      playTone(start + 1.65, 262, 0.08, 0.01, 'sine');
-    };
+    const start = audio.currentTime + 0.05;
+    patterns[track]();
+    playTone(start + 1.65, 262, 0.08, 0.01, 'sine');
+  }
 
-    loop();
-    intervalRef.current = window.setInterval(loop, 1800);
+  function scheduleLoop() {
+    clearLoop();
+    if (!playingRef.current) return;
+    playPattern(trackRef.current);
+    timeoutRef.current = window.setTimeout(scheduleLoop, 1800);
+  }
 
-    return () => {
-      if (intervalRef.current !== null) {
-        window.clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-      void audio.close();
+  async function start(nextTrack = trackRef.current) {
+    const audio = ensureAudio();
+    if (!audio) return;
+    trackRef.current = nextTrack;
+    setMusicTrack(nextTrack);
+    playingRef.current = true;
+    setMusicOn(true);
+    if (audio.state === 'suspended') {
+      await audio.resume();
+    }
+    scheduleLoop();
+  }
+
+  function stop() {
+    playingRef.current = false;
+    setMusicOn(false);
+    clearLoop();
+    if (masterRef.current && audioRef.current) {
+      const now = audioRef.current.currentTime;
+      masterRef.current.gain.cancelScheduledValues(now);
+      masterRef.current.gain.setTargetAtTime(0.0001, now, 0.025);
+      window.setTimeout(() => {
+        if (!playingRef.current && audioRef.current?.state === 'running') {
+          void audioRef.current.suspend();
+        }
+        if (masterRef.current) {
+          masterRef.current.gain.value = 0.045;
+        }
+      }, 90);
+    }
+  }
+
+  function toggle() {
+    if (playingRef.current) {
+      stop();
+      return;
+    }
+    void start();
+  }
+
+  function chooseTrack(nextTrack: MusicTrack) {
+    void start(nextTrack);
+  }
+
+  useEffect(
+    () => () => {
+      clearLoop();
+      playingRef.current = false;
+      void audioRef.current?.close();
       audioRef.current = null;
-    };
-  }, [enabled, track]);
+      masterRef.current = null;
+    },
+    [],
+  );
+
+  return {
+    musicOn,
+    musicTrack,
+    toggleMusic: toggle,
+    chooseMusicTrack: chooseTrack,
+    stopMusic: stop,
+  };
 }
 
 export default function App() {
@@ -1034,8 +1117,6 @@ export default function App() {
   const [year, setYear] = useState(2026);
   const [lang, setLang] = useState<Lang>('en');
   const [edition, setEdition] = useState<Edition>('worldCup');
-  const [musicOn, setMusicOn] = useState(false);
-  const [musicTrack, setMusicTrack] = useState<MusicTrack>('anthem');
   const [countries, setCountries] = useState<string[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [squadsByYear, setSquadsByYear] = useState<Record<number, SquadMap>>({});
@@ -1086,7 +1167,13 @@ export default function App() {
     { GK: 0, DEF: 0, MID: 0, ATT: 0 },
   );
 
-  useQuietFootballLoop(musicOn, musicTrack);
+  const {
+    musicOn,
+    musicTrack,
+    toggleMusic,
+    chooseMusicTrack,
+    stopMusic,
+  } = useQuietFootballLoop('anthem');
 
   async function loadLeaderboard() {
     const { data, error } = await supabase
@@ -1357,7 +1444,7 @@ export default function App() {
   }
 
   async function signOut() {
-    setMusicOn(false);
+    stopMusic();
     setProfile(null);
     setPlayerPassword('');
     setAuthPassword('');
@@ -1473,7 +1560,7 @@ export default function App() {
           </div>
           <button
             className={musicOn ? 'music-toggle active' : 'music-toggle'}
-            onClick={() => setMusicOn((current) => !current)}
+            onClick={toggleMusic}
             type="button"
           >
             {musicOn ? copy.musicOn : copy.musicOff}
@@ -1499,10 +1586,7 @@ export default function App() {
               <button
                 key={track}
                 className={musicTrack === track ? 'active' : ''}
-                onClick={() => {
-                  setMusicTrack(track);
-                  setMusicOn(true);
-                }}
+                onClick={() => chooseMusicTrack(track)}
                 type="button"
               >
                 {copy.tracks[track]}
