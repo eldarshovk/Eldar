@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from 'react';
 import { supabase } from './lib/supabase';
+import type { Session } from '@supabase/supabase-js';
 
 type Line = 'GK' | 'DEF' | 'MID' | 'ATT';
 
@@ -37,6 +38,7 @@ type AuthMode = 'signin' | 'signup';
 type Profile = {
   id: string;
   username: string;
+  provider: 'password' | 'google';
 };
 
 type LeaderboardEntry = {
@@ -913,165 +915,49 @@ function squadRead(selectedPlayers: Player[], lang: Lang) {
 }
 
 const MUSIC_TRACKS: MusicTrack[] = ['anthem', 'drums', 'chant', 'celebration'];
+const MUSIC_SOURCES: Record<MusicTrack, string> = {
+  anthem: '/sounds/anthem.ogg',
+  drums: '/sounds/drums.wav',
+  chant: '/sounds/chant.ogg',
+  celebration: '/sounds/celebration.ogg',
+};
 
 function useQuietFootballLoop(initialTrack: MusicTrack) {
   const [musicOn, setMusicOn] = useState(false);
   const [musicTrack, setMusicTrack] = useState<MusicTrack>(initialTrack);
-  const audioRef = useRef<AudioContext | null>(null);
-  const masterRef = useRef<GainNode | null>(null);
-  const timeoutRef = useRef<number | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const trackRef = useRef<MusicTrack>(initialTrack);
   const playingRef = useRef(false);
 
-  function ensureAudio() {
-    if (audioRef.current && masterRef.current) return audioRef.current;
-    const AudioContextClass = window.AudioContext
-      || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioContextClass) return null;
-
-    const audio = new AudioContextClass();
-    const master = audio.createGain();
-    master.gain.value = 0.045;
-    master.connect(audio.destination);
-    audioRef.current = audio;
-    masterRef.current = master;
-    return audio;
-  }
-
-  function clearLoop() {
-    if (timeoutRef.current !== null) {
-      window.clearTimeout(timeoutRef.current);
-      timeoutRef.current = null;
-    }
-  }
-
-  function playPattern(track: MusicTrack) {
-    const audio = audioRef.current;
-    const master = masterRef.current;
-    if (!audio || !master || !playingRef.current) return;
-
-    const playTone = (
-      time: number,
-      frequency: number,
-      duration: number,
-      volume: number,
-      type: OscillatorType = 'sine',
-    ) => {
-      const oscillator = audio.createOscillator();
-      const gain = audio.createGain();
-      oscillator.type = type;
-      oscillator.frequency.value = frequency;
-      gain.gain.setValueAtTime(0, time);
-      gain.gain.linearRampToValueAtTime(volume, time + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
-      oscillator.connect(gain);
-      gain.connect(master);
-      oscillator.start(time);
-      oscillator.stop(time + duration + 0.04);
-    };
-
-    const playKick = (time: number, volume = 0.09) => {
-      const oscillator = audio.createOscillator();
-      const gain = audio.createGain();
-      oscillator.type = 'triangle';
-      oscillator.frequency.setValueAtTime(95, time);
-      oscillator.frequency.exponentialRampToValueAtTime(45, time + 0.16);
-      gain.gain.setValueAtTime(volume, time);
-      gain.gain.exponentialRampToValueAtTime(0.001, time + 0.18);
-      oscillator.connect(gain);
-      gain.connect(master);
-      oscillator.start(time);
-      oscillator.stop(time + 0.22);
-    };
-
-    const playClap = (time: number) => {
-      [620, 760, 920].forEach((frequency, index) => {
-        playTone(time + index * 0.012, frequency, 0.055, 0.012, 'square');
-      });
-    };
-
-    const patterns: Record<MusicTrack, () => void> = {
-      anthem: () => {
-        const start = audio.currentTime + 0.05;
-        [392, 440, 494, 587, 494, 440, 392, 330].forEach((note, index) => {
-          playTone(start + index * 0.25, note, 0.22, 0.032, 'sine');
-        });
-        [196, 220, 247, 294].forEach((note, index) => {
-          playTone(start + index * 0.5, note, 0.44, 0.012, 'triangle');
-        });
-        playKick(start, 0.055);
-        playKick(start + 1);
-      },
-      drums: () => {
-        const start = audio.currentTime + 0.05;
-        [0, 0.28, 0.56, 0.84, 1.12, 1.4].forEach((offset) => playKick(start + offset, 0.105));
-        [0.14, 0.42, 0.7, 0.98, 1.26, 1.54].forEach((offset) => {
-          playTone(start + offset, 155, 0.07, 0.022, 'square');
-        });
-        [0.21, 0.77, 1.33].forEach((offset) => playClap(start + offset));
-      },
-      chant: () => {
-        const start = audio.currentTime + 0.05;
-        [0, 0.26, 0.52, 0.96, 1.22, 1.48].forEach((offset, index) => {
-          playTone(start + offset, index % 2 === 0 ? 262 : 330, 0.2, 0.032, 'sawtooth');
-          playTone(start + offset, index % 2 === 0 ? 196 : 247, 0.2, 0.018, 'triangle');
-        });
-        [0.78, 1.7].forEach((offset) => playClap(start + offset));
-        playKick(start + 0.88, 0.06);
-      },
-      celebration: () => {
-        const start = audio.currentTime + 0.05;
-        [523, 659, 784, 1047, 880, 1047, 1175, 1319].forEach((note, index) => {
-          playTone(start + index * 0.16, note, 0.14, 0.03, 'sine');
-          playTone(start + index * 0.16, note / 2, 0.13, 0.012, 'triangle');
-        });
-        [0, 0.32, 0.64, 0.96, 1.28].forEach((offset) => playKick(start + offset, 0.07));
-        [0.24, 0.56, 0.88, 1.2, 1.52].forEach((offset) => playClap(start + offset));
-      },
-    };
-
-    const start = audio.currentTime + 0.05;
-    patterns[track]();
-    playTone(start + 1.65, 262, 0.08, 0.01, 'sine');
-  }
-
-  function scheduleLoop() {
-    clearLoop();
-    if (!playingRef.current) return;
-    playPattern(trackRef.current);
-    timeoutRef.current = window.setTimeout(scheduleLoop, 1800);
+  function stopCurrentAudio() {
+    if (!audioRef.current) return;
+    audioRef.current.pause();
+    audioRef.current.currentTime = 0;
   }
 
   async function start(nextTrack = trackRef.current) {
-    const audio = ensureAudio();
-    if (!audio) return;
+    const nextSource = MUSIC_SOURCES[nextTrack];
+    const needsNewAudio = !audioRef.current || !audioRef.current.src.endsWith(nextSource);
+
+    if (needsNewAudio) {
+      stopCurrentAudio();
+      audioRef.current = new Audio(nextSource);
+      audioRef.current.loop = true;
+      audioRef.current.volume = nextTrack === 'chant' || nextTrack === 'celebration' ? 0.42 : 0.34;
+      audioRef.current.preload = 'auto';
+    }
+
     trackRef.current = nextTrack;
     setMusicTrack(nextTrack);
     playingRef.current = true;
     setMusicOn(true);
-    if (audio.state === 'suspended') {
-      await audio.resume();
-    }
-    scheduleLoop();
+    await audioRef.current?.play();
   }
 
   function stop() {
     playingRef.current = false;
     setMusicOn(false);
-    clearLoop();
-    if (masterRef.current && audioRef.current) {
-      const now = audioRef.current.currentTime;
-      masterRef.current.gain.cancelScheduledValues(now);
-      masterRef.current.gain.setTargetAtTime(0.0001, now, 0.025);
-      window.setTimeout(() => {
-        if (!playingRef.current && audioRef.current?.state === 'running') {
-          void audioRef.current.suspend();
-        }
-        if (masterRef.current) {
-          masterRef.current.gain.value = 0.045;
-        }
-      }, 90);
-    }
+    stopCurrentAudio();
   }
 
   function toggle() {
@@ -1088,11 +974,9 @@ function useQuietFootballLoop(initialTrack: MusicTrack) {
 
   useEffect(
     () => () => {
-      clearLoop();
       playingRef.current = false;
-      void audioRef.current?.close();
+      stopCurrentAudio();
       audioRef.current = null;
-      masterRef.current = null;
     },
     [],
   );
@@ -1108,12 +992,14 @@ function useQuietFootballLoop(initialTrack: MusicTrack) {
 
 export default function App() {
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [googleSession, setGoogleSession] = useState<Session | null>(null);
   const [authMode, setAuthMode] = useState<AuthMode>('signup');
   const [authUsername, setAuthUsername] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [playerPassword, setPlayerPassword] = useState('');
   const [authMessage, setAuthMessage] = useState('');
   const [authBusy, setAuthBusy] = useState(false);
+  const [googleBusy, setGoogleBusy] = useState(false);
   const [year, setYear] = useState(2026);
   const [lang, setLang] = useState<Lang>('en');
   const [edition, setEdition] = useState<Edition>('worldCup');
@@ -1192,8 +1078,8 @@ export default function App() {
     setLeaderboard((data ?? []) as LeaderboardEntry[]);
   }
 
-  function enterPlayer(saved: SavedGame, password: string) {
-    setProfile({ id: saved.player_id, username: saved.username });
+  function enterPlayer(saved: SavedGame, provider: Profile['provider'], password = '') {
+    setProfile({ id: saved.player_id, username: saved.username, provider });
     setPlayerPassword(password);
 
     if (saved.year && saved.edition) {
@@ -1204,6 +1090,47 @@ export default function App() {
       setSaveMessage('Saved progress loaded.');
     }
   }
+
+  async function enterGooglePlayer(nextSession: Session) {
+    setGoogleBusy(true);
+    setAuthMessage('');
+    const { data, error } = await supabase.rpc('login_google_game_player');
+
+    if (error) {
+      setAuthMessage(error.message);
+      setGoogleBusy(false);
+      return;
+    }
+
+    const [savedPlayer] = (data ?? []) as SavedGame[];
+    if (savedPlayer) {
+      setGoogleSession(nextSession);
+      enterPlayer(savedPlayer, 'google');
+    }
+    setGoogleBusy(false);
+  }
+
+  useEffect(() => {
+    let active = true;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (!active || !data.session) return;
+      void enterGooglePlayer(data.session);
+    });
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      if (nextSession) {
+        void enterGooglePlayer(nextSession);
+      } else {
+        setGoogleSession(null);
+      }
+    });
+
+    return () => {
+      active = false;
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     void loadLeaderboard();
@@ -1421,7 +1348,7 @@ export default function App() {
         }
 
         const [createdPlayer] = (data ?? []) as SavedGame[];
-        if (createdPlayer) enterPlayer(createdPlayer, authPassword);
+        if (createdPlayer) enterPlayer(createdPlayer, 'password', authPassword);
       } else {
         const { data, error } = await supabase.rpc('login_game_player', {
           p_username: username,
@@ -1434,7 +1361,7 @@ export default function App() {
         }
 
         const [savedPlayer] = (data ?? []) as SavedGame[];
-        if (savedPlayer) enterPlayer(savedPlayer, authPassword);
+        if (savedPlayer) enterPlayer(savedPlayer, 'password', authPassword);
       }
     } catch {
       setAuthMessage('Something went wrong. Try again.');
@@ -1443,9 +1370,29 @@ export default function App() {
     }
   }
 
+  async function handleGoogleSignIn() {
+    setGoogleBusy(true);
+    setAuthMessage('');
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.origin,
+      },
+    });
+
+    if (error) {
+      setAuthMessage(error.message);
+      setGoogleBusy(false);
+    }
+  }
+
   async function signOut() {
     stopMusic();
+    if (googleSession) {
+      await supabase.auth.signOut();
+    }
     setProfile(null);
+    setGoogleSession(null);
     setPlayerPassword('');
     setAuthPassword('');
     setCountries([]);
@@ -1454,21 +1401,31 @@ export default function App() {
   }
 
   async function saveProgress() {
-    if (!profile || !playerPassword) return;
+    if (!profile) return;
     setSaving(true);
     setSaveMessage('');
 
     const clubName = clubNameForUsername(profile.username);
-    const { error } = await supabase.rpc('save_game_progress', {
-      p_player_id: profile.id,
-      p_password: playerPassword,
-      p_year: year,
-      p_edition: edition,
-      p_countries: countries,
-      p_selected_ids: selectedIds,
-      p_score: score,
-      p_club_name: clubName,
-    });
+    const { error } = profile.provider === 'google'
+      ? await supabase.rpc('save_google_game_progress', {
+        p_player_id: profile.id,
+        p_year: year,
+        p_edition: edition,
+        p_countries: countries,
+        p_selected_ids: selectedIds,
+        p_score: score,
+        p_club_name: clubName,
+      })
+      : await supabase.rpc('save_game_progress', {
+        p_player_id: profile.id,
+        p_password: playerPassword,
+        p_year: year,
+        p_edition: edition,
+        p_countries: countries,
+        p_selected_ids: selectedIds,
+        p_score: score,
+        p_club_name: clubName,
+      });
 
     if (error) {
       setSaveMessage(error.message);
@@ -1514,11 +1471,23 @@ export default function App() {
                 required
               />
             </label>
-            <button type="submit" disabled={authBusy}>
-              {authBusy ? 'Working...' : authMode === 'signup' ? 'Create player' : 'Sign in'}
-            </button>
-          </form>
-          {authMessage && <p className="auth-message">{authMessage}</p>}
+	            <button type="submit" disabled={authBusy}>
+	              {authBusy ? 'Working...' : authMode === 'signup' ? 'Create player' : 'Sign in'}
+	            </button>
+	          </form>
+	          <div className="auth-divider">
+	            <span>or</span>
+	          </div>
+	          <button
+	            className="google-button"
+	            onClick={handleGoogleSignIn}
+	            disabled={googleBusy}
+	            type="button"
+	          >
+	            <span aria-hidden="true">G</span>
+	            {googleBusy ? 'Opening Google...' : 'Continue with Google'}
+	          </button>
+	          {authMessage && <p className="auth-message">{authMessage}</p>}
           <button
             className="auth-switch"
             onClick={() => {
