@@ -58,6 +58,20 @@ type SavedGame = {
   selected_ids?: string[] | null;
 };
 
+type AdminPlayer = {
+  username: string;
+  auth_provider: string;
+  club_name: string | null;
+  score: number | null;
+  year: number | null;
+  edition: string | null;
+  countries_count: number;
+  selected_count: number;
+  password_status: string;
+  created_at: string;
+  updated_at: string | null;
+};
+
 const COIN_BUDGET = 15000;
 const MIN_COUNTRIES = 3;
 const MAX_COUNTRIES = 5;
@@ -1044,6 +1058,10 @@ export default function App() {
   const [saving, setSaving] = useState(false);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [leaderboardError, setLeaderboardError] = useState('');
+  const [everythingRows, setEverythingRows] = useState<AdminPlayer[]>([]);
+  const [everythingError, setEverythingError] = useState('');
+  const [everythingOpen, setEverythingOpen] = useState(false);
+  const [everythingLoading, setEverythingLoading] = useState(false);
   const [screamerKind, setScreamerKind] = useState<ScreamerKind | null>(null);
   const screamerTurnRef = useRef<ScreamerKind>('sixtySeven');
 
@@ -1075,6 +1093,7 @@ export default function App() {
   const score = squadScore(selectedPlayers);
   const copy = COPY[lang];
   const read = squadRead(selectedPlayers, lang);
+  const isSigmaAdmin = profile?.provider === 'password' && normalizeUsername(profile.username) === 'sigma';
   const lineCounts = selectedPlayers.reduce<Record<Line, number>>(
     (counts, player) => ({ ...counts, [player.line]: counts[player.line] + 1 }),
     { GK: 0, DEF: 0, MID: 0, ATT: 0 },
@@ -1425,6 +1444,26 @@ export default function App() {
     }
   }
 
+  async function loadEverything() {
+    if (!profile || !isSigmaAdmin) return;
+    setEverythingLoading(true);
+    setEverythingError('');
+
+    const { data, error } = await supabase.rpc('admin_list_game_players', {
+      p_admin_username: profile.username,
+      p_admin_password: playerPassword,
+    });
+
+    if (error) {
+      setEverythingError(error.message);
+    } else {
+      setEverythingRows((data ?? []) as AdminPlayer[]);
+      setEverythingOpen(true);
+    }
+
+    setEverythingLoading(false);
+  }
+
   async function signOut() {
     stopMusic();
     if (googleSession) {
@@ -1437,6 +1476,9 @@ export default function App() {
     setCountries([]);
     setSelectedIds([]);
     setSaveMessage('');
+    setEverythingRows([]);
+    setEverythingError('');
+    setEverythingOpen(false);
   }
 
   async function saveProgress() {
@@ -1621,6 +1663,11 @@ export default function App() {
           <button className="start-over" onClick={startOver} type="button">
             {copy.startOver}
           </button>
+          {isSigmaAdmin && (
+            <button className="everything-button" onClick={loadEverything} disabled={everythingLoading} type="button">
+              {everythingLoading ? 'Loading...' : 'Everything'}
+            </button>
+          )}
           <button className="sign-out" onClick={signOut} type="button">
             Sign out
           </button>
@@ -1732,6 +1779,48 @@ export default function App() {
           </div>
         </aside>
       </section>
+
+      {isSigmaAdmin && (everythingOpen || everythingError) && (
+        <section className="panel everything-panel">
+          <div className="section-title">
+            <h2>Everything</h2>
+            <p>{everythingRows.length} players</p>
+          </div>
+          {everythingError && <p className="data-message">{everythingError}</p>}
+          {!everythingError && (
+            <div className="everything-table-wrap">
+              <table className="everything-table">
+                <thead>
+                  <tr>
+                    <th>Username</th>
+                    <th>Account</th>
+                    <th>Password</th>
+                    <th>Club</th>
+                    <th>Score</th>
+                    <th>Save</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {everythingRows.map((row) => (
+                    <tr key={`${row.username}-${row.created_at}`}>
+                      <td>{row.username}</td>
+                      <td>{row.auth_provider}</td>
+                      <td>{row.password_status}</td>
+                      <td>{row.club_name ?? '-'}</td>
+                      <td>{row.score?.toLocaleString() ?? '0'}</td>
+                      <td>
+                        {row.year
+                          ? `${row.year} ${row.edition} / ${row.selected_count} players`
+                          : 'No save'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
 
       <section className="panel players-panel">
           <div className="section-title">

@@ -496,6 +496,7 @@ h2 {
 
 .start-over,
 .save-button,
+.everything-button,
 .sign-out {
   width: 100%;
   min-height: 36px;
@@ -511,6 +512,11 @@ h2 {
 .save-button {
   color: var(--ink);
   background: var(--theme-c, var(--gold));
+}
+
+.everything-button {
+  color: white;
+  background: linear-gradient(135deg, #111, var(--theme-a, var(--grass)));
 }
 
 .sign-out {
@@ -845,6 +851,38 @@ button:disabled {
 
 .players-panel {
   margin-bottom: 22px;
+}
+
+.everything-panel {
+  margin-bottom: 18px;
+}
+
+.everything-table-wrap {
+  overflow-x: auto;
+}
+
+.everything-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 760px;
+}
+
+.everything-table th,
+.everything-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.everything-table th {
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.everything-table td {
+  font-weight: 800;
 }
 
 .data-message {
