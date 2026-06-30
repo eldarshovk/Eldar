@@ -37,6 +37,94 @@ button {
   padding: 28px 0 48px;
 }
 
+.auth-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+}
+
+.auth-card {
+  width: min(520px, 100%);
+  padding: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.52);
+  border-radius: 8px;
+  color: white;
+  background:
+    linear-gradient(rgba(8, 26, 22, 0.74), rgba(8, 26, 22, 0.86)),
+    repeating-linear-gradient(90deg, #1677c8 0 80px, #19a45b 80px 160px);
+  box-shadow: 0 24px 70px rgba(20, 34, 29, 0.18);
+}
+
+.auth-card h1 {
+  font-size: clamp(38px, 7vw, 66px);
+}
+
+.auth-copy {
+  margin-top: 12px;
+  color: rgba(255, 255, 255, 0.86);
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.auth-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.auth-form label {
+  display: grid;
+  gap: 7px;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.auth-form input {
+  min-height: 46px;
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.52);
+  border-radius: 8px;
+  padding: 11px 12px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.94);
+  font: inherit;
+  font-weight: 800;
+}
+
+.auth-form button,
+.auth-switch {
+  min-height: 44px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--ink);
+  background: var(--gold);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.auth-form button:disabled {
+  opacity: 0.7;
+}
+
+.auth-message {
+  margin-top: 12px;
+  padding: 11px 12px;
+  border-radius: 8px;
+  color: #6d5311;
+  background: #fff8df;
+  font-weight: 800;
+}
+
+.auth-switch {
+  width: 100%;
+  margin-top: 12px;
+  color: white;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
 .hero {
   min-height: 220px;
   display: grid;
@@ -256,7 +344,17 @@ h2 {
   background: var(--danger);
 }
 
-.start-over {
+.score-pill {
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: white !important;
+  background: linear-gradient(135deg, var(--theme-a, var(--grass)), var(--theme-b, var(--blue)));
+  font-weight: 900;
+}
+
+.start-over,
+.save-button,
+.sign-out {
   width: 100%;
   min-height: 36px;
   padding: 8px 10px;
@@ -268,8 +366,25 @@ h2 {
   cursor: pointer;
 }
 
+.save-button {
+  color: var(--ink);
+  background: var(--theme-c, var(--gold));
+}
+
+.sign-out {
+  color: var(--ink);
+  background: white;
+}
+
 .start-over:hover {
   filter: brightness(1.05);
+}
+
+.save-message {
+  max-width: 190px;
+  text-align: right;
+  font-weight: 800;
+  line-height: 1.2;
 }
 
 .panel {
@@ -515,6 +630,75 @@ button:disabled {
 .line-meter strong {
   color: var(--ink);
   font-size: 13px;
+}
+
+.leaderboard-card {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.leaderboard-empty {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.leaderboard-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.leaderboard-list li {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  gap: 9px;
+  align-items: center;
+  min-height: 48px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f6f8f7;
+}
+
+.leaderboard-list li.current {
+  border-color: var(--grass-dark);
+  background: color-mix(in srgb, var(--theme-c, var(--gold)) 28%, white);
+}
+
+.leaderboard-rank {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  color: white;
+  background: var(--grass-dark);
+  font-weight: 900;
+}
+
+.leaderboard-list span:not(.leaderboard-rank) {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.leaderboard-list strong,
+.leaderboard-list em {
+  overflow-wrap: anywhere;
+}
+
+.leaderboard-list em {
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.leaderboard-list b {
+  color: var(--grass-dark);
 }
 
 .players-panel {

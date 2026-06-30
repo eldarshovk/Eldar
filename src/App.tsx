@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from 'react';
+import { supabase } from './lib/supabase';
+import type { Session } from '@supabase/supabase-js';
 
 type Line = 'GK' | 'DEF' | 'MID' | 'ATT';
 
@@ -31,6 +33,26 @@ type ClubMap = Record<string, string | null>;
 type Lang = 'en' | 'ru';
 type MusicTrack = 'anthem' | 'drums' | 'chant' | 'celebration';
 type Edition = 'worldCup' | 'global';
+type AuthMode = 'signin' | 'signup';
+
+type Profile = {
+  username: string;
+};
+
+type LeaderboardEntry = {
+  user_id: string;
+  username: string;
+  club_name: string;
+  score: number;
+  updated_at: string;
+};
+
+type SavedGame = {
+  year: number;
+  edition: Edition;
+  countries: string[];
+  selected_ids: string[];
+};
 
 const COIN_BUDGET = 15000;
 const MIN_COUNTRIES = 3;
@@ -442,6 +464,28 @@ function normalizeName(value: string) {
     .replace(/[^a-z0-9]+/gi, ' ')
     .trim()
     .toLowerCase();
+}
+
+function normalizeUsername(value: string) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
+}
+
+function authEmailForUsername(username: string) {
+  return `${normalizeUsername(username)}@world-cup-club.local`;
+}
+
+function clubNameForUsername(username: string) {
+  return `${username}'s Club`;
+}
+
+function squadScore(selectedPlayers: Player[]) {
+  if (!selectedPlayers.length) return 0;
+  const attack = average(selectedPlayers.map((player) => player.attack));
+  const midfield = average(selectedPlayers.map((player) => player.midfield));
+  const defense = average(selectedPlayers.map((player) => player.defense));
+  const overall = average(selectedPlayers.map((player) => player.overall));
+  const completionBonus = selectedPlayers.length === REQUIRED_PLAYERS ? 120 : selectedPlayers.length * 2;
+  return Math.round(overall * 10 + attack + midfield + defense + completionBonus);
 }
 
 function positionToLine(position: string): Line | null {
@@ -982,6 +1026,13 @@ function useQuietFootballLoop(enabled: boolean, track: MusicTrack) {
 }
 
 export default function App() {
+  const [session, setSession] = useState<Session | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [authMode, setAuthMode] = useState<AuthMode>('signup');
+  const [authUsername, setAuthUsername] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authMessage, setAuthMessage] = useState('');
+  const [authBusy, setAuthBusy] = useState(false);
   const [year, setYear] = useState(2026);
   const [lang, setLang] = useState<Lang>('en');
   const [edition, setEdition] = useState<Edition>('worldCup');
@@ -999,6 +1050,10 @@ export default function App() {
   const [loadingPhotos, setLoadingPhotos] = useState(false);
   const [loadingClubs, setLoadingClubs] = useState(false);
   const [squadError, setSquadError] = useState('');
+  const [saveMessage, setSaveMessage] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [leaderboardError, setLeaderboardError] = useState('');
 
   const qualifiedCountries = WORLD_CUPS[year];
   const availableCountries = edition === 'worldCup'
@@ -1025,6 +1080,7 @@ export default function App() {
   const selectedPlayers = playerPool.filter((player) => selectedIds.includes(player.id));
   const selectedCost = selectedPlayers.reduce((sum, player) => sum + player.cost, 0);
   const coinsLeft = COIN_BUDGET - selectedCost;
+  const score = squadScore(selectedPlayers);
   const copy = COPY[lang];
   const read = squadRead(selectedPlayers, lang);
   const lineCounts = selectedPlayers.reduce<Record<Line, number>>(
@@ -1033,6 +1089,74 @@ export default function App() {
   );
 
   useQuietFootballLoop(musicOn, musicTrack);
+
+  async function loadLeaderboard() {
+    const { data, error } = await supabase
+      .from('leaderboard_entries')
+      .select('user_id, username, club_name, score, updated_at')
+      .order('score', { ascending: false })
+      .order('updated_at', { ascending: true })
+      .limit(10);
+
+    if (error) {
+      setLeaderboardError(error.message);
+      return;
+    }
+
+    setLeaderboardError('');
+    setLeaderboard((data ?? []) as LeaderboardEntry[]);
+  }
+
+  async function loadProfileAndSave(nextSession: Session) {
+    const fallbackUsername = nextSession.user.email?.split('@')[0] ?? 'player';
+    const { data: profileData } = await supabase
+      .from('profiles')
+      .select('username')
+      .eq('user_id', nextSession.user.id)
+      .maybeSingle();
+
+    setProfile({ username: profileData?.username ?? fallbackUsername });
+
+    const { data: saveData } = await supabase
+      .from('game_saves')
+      .select('year, edition, countries, selected_ids')
+      .eq('user_id', nextSession.user.id)
+      .maybeSingle();
+
+    if (saveData) {
+      const saved = saveData as SavedGame;
+      setYear(saved.year);
+      setEdition(saved.edition);
+      setCountries(saved.countries ?? []);
+      setSelectedIds(saved.selected_ids ?? []);
+      setSaveMessage('Saved progress loaded.');
+    }
+  }
+
+  useEffect(() => {
+    let active = true;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (!active) return;
+      setSession(data.session);
+      if (data.session) void loadProfileAndSave(data.session);
+    });
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+      setProfile(null);
+      if (nextSession) void loadProfileAndSave(nextSession);
+    });
+
+    return () => {
+      active = false;
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    void loadLeaderboard();
+  }, []);
 
   useEffect(() => {
     if (squadsByYear[year]) return;
@@ -1165,34 +1289,40 @@ export default function App() {
     setYear(nextYear);
     setCountries([]);
     setSelectedIds([]);
+    setSaveMessage('');
   }
 
   function changeEdition(nextEdition: Edition) {
     setEdition(nextEdition);
     setCountries([]);
     setSelectedIds([]);
+    setSaveMessage('');
   }
 
   function startOver() {
     setCountries([]);
     setSelectedIds([]);
+    setSaveMessage('');
   }
 
   function toggleCountry(country: string) {
     if (countries.includes(country)) {
       setCountries(countries.filter((item) => item !== country));
-      setSelectedIds((ids) => ids.filter((id) => !id.startsWith(`${country}-`)));
+      setSelectedIds((ids) => ids.filter((id) => !id.startsWith(`${year}-${country}-`)));
+      setSaveMessage('');
       return;
     }
 
     if (countries.length < MAX_COUNTRIES) {
       setCountries([...countries, country]);
+      setSaveMessage('');
     }
   }
 
   function togglePlayer(id: string) {
     if (selectedIds.includes(id)) {
       setSelectedIds(selectedIds.filter((item) => item !== id));
+      setSaveMessage('');
       return;
     }
 
@@ -1204,7 +1334,169 @@ export default function App() {
       selectedCost + player.cost <= COIN_BUDGET
     ) {
       setSelectedIds([...selectedIds, id]);
+      setSaveMessage('');
     }
+  }
+
+  async function handleAuthSubmit(event: FormEvent) {
+    event.preventDefault();
+    const username = normalizeUsername(authUsername);
+    setAuthMessage('');
+
+    if (username.length < 3) {
+      setAuthMessage('Username needs at least 3 letters, numbers, or underscores.');
+      return;
+    }
+
+    if (authPassword.length < 6) {
+      setAuthMessage('Password needs at least 6 characters.');
+      return;
+    }
+
+    setAuthBusy(true);
+    const email = authEmailForUsername(username);
+
+    try {
+      if (authMode === 'signup') {
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password: authPassword,
+          options: {
+            data: { username },
+          },
+        });
+
+        if (error) {
+          setAuthMessage(error.message.includes('already')
+            ? 'That username is already taken.'
+            : error.message);
+          return;
+        }
+
+        if (data.user) {
+          await supabase.from('profiles').upsert({
+            user_id: data.user.id,
+            username,
+            username_normalized: username,
+          });
+        }
+
+        if (!data.session) {
+          setAuthMode('signin');
+          setAuthMessage('Account created. Sign in with the same username and password.');
+        }
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({ email, password: authPassword });
+        if (error) setAuthMessage('Wrong username or password.');
+      }
+    } catch {
+      setAuthMessage('Something went wrong. Try again.');
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
+  async function signOut() {
+    setMusicOn(false);
+    await supabase.auth.signOut();
+    setProfile(null);
+    setCountries([]);
+    setSelectedIds([]);
+    setSaveMessage('');
+  }
+
+  async function saveProgress() {
+    if (!session || !profile) return;
+    setSaving(true);
+    setSaveMessage('');
+
+    const clubName = clubNameForUsername(profile.username);
+    const savePayload = {
+      user_id: session.user.id,
+      year,
+      edition,
+      countries,
+      selected_ids: selectedIds,
+      score,
+      club_name: clubName,
+      updated_at: new Date().toISOString(),
+    };
+
+    const leaderboardPayload = {
+      user_id: session.user.id,
+      username: profile.username,
+      club_name: clubName,
+      score,
+      updated_at: savePayload.updated_at,
+    };
+
+    const { error: saveError } = await supabase.from('game_saves').upsert(savePayload);
+    const { error: leaderboardSaveError } = await supabase
+      .from('leaderboard_entries')
+      .upsert(leaderboardPayload);
+
+    if (saveError || leaderboardSaveError) {
+      setSaveMessage(saveError?.message ?? leaderboardSaveError?.message ?? 'Save failed.');
+    } else {
+      setSaveMessage('Saved. Your club is on the leaderboard.');
+      await loadLeaderboard();
+    }
+
+    setSaving(false);
+  }
+
+  if (!session) {
+    return (
+      <main className="app-shell auth-shell">
+        <section className="auth-card">
+          <p className="eyebrow">World Cup squad lab</p>
+          <h1>Register your club.</h1>
+          <p className="auth-copy">
+            Pick a unique username and password before building your team.
+          </p>
+          <form className="auth-form" onSubmit={handleAuthSubmit}>
+            <label>
+              Username
+              <input
+                autoComplete="username"
+                minLength={3}
+                pattern="[a-zA-Z0-9_]+"
+                placeholder="champion_10"
+                value={authUsername}
+                onChange={(event) => setAuthUsername(event.target.value)}
+                required
+              />
+            </label>
+            <label>
+              Password
+              <input
+                autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'}
+                minLength={6}
+                placeholder="6+ characters"
+                type="password"
+                value={authPassword}
+                onChange={(event) => setAuthPassword(event.target.value)}
+                required
+              />
+            </label>
+            <button type="submit" disabled={authBusy}>
+              {authBusy ? 'Working...' : authMode === 'signup' ? 'Create player' : 'Sign in'}
+            </button>
+          </form>
+          {authMessage && <p className="auth-message">{authMessage}</p>}
+          <button
+            className="auth-switch"
+            onClick={() => {
+              setAuthMode(authMode === 'signup' ? 'signin' : 'signup');
+              setAuthMessage('');
+            }}
+            type="button"
+          >
+            {authMode === 'signup' ? 'Already registered? Sign in' : 'Need a player? Register'}
+          </button>
+        </section>
+      </main>
+    );
   }
 
   return (
@@ -1271,14 +1563,23 @@ export default function App() {
           </div>
         </div>
         <div className="scoreboard">
+          <span>Player: {profile?.username ?? 'loading'}</span>
           <span>{countries.length}/{MAX_COUNTRIES} {copy.countryCount}</span>
           <strong>{selectedPlayers.length}/{REQUIRED_PLAYERS} {copy.players}</strong>
+          <span className="score-pill">{score.toLocaleString()} score</span>
           <span className={coinsLeft < 0 ? 'coins danger' : 'coins'}>
             {coinsLeft.toLocaleString()} {copy.coinsLeft}
           </span>
+          <button className="save-button" onClick={saveProgress} disabled={saving} type="button">
+            {saving ? 'Saving...' : 'Save'}
+          </button>
           <button className="start-over" onClick={startOver} type="button">
             {copy.startOver}
           </button>
+          <button className="sign-out" onClick={signOut} type="button">
+            Sign out
+          </button>
+          {saveMessage && <span className="save-message">{saveMessage}</span>}
         </div>
       </section>
 
@@ -1361,6 +1662,28 @@ export default function App() {
                 {lineCounts[line]}/{LINE_REQUIREMENTS[line]}
               </span>
             ))}
+          </div>
+          <div className="leaderboard-card">
+            <div className="section-title">
+              <h2>Best Clubs</h2>
+              <p>Top 10</p>
+            </div>
+            {leaderboardError && <p className="data-message">{leaderboardError}</p>}
+            {!leaderboardError && leaderboard.length === 0 && (
+              <p className="leaderboard-empty">Save a team to enter the race.</p>
+            )}
+            <ol className="leaderboard-list">
+              {leaderboard.map((entry, index) => (
+                <li key={entry.user_id} className={entry.user_id === session.user.id ? 'current' : ''}>
+                  <span className="leaderboard-rank">{index + 1}</span>
+                  <span>
+                    <strong>{entry.club_name}</strong>
+                    <em>@{entry.username}</em>
+                  </span>
+                  <b>{entry.score.toLocaleString()}</b>
+                </li>
+              ))}
+            </ol>
           </div>
         </aside>
       </section>
