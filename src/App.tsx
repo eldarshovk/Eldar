@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from 'react';
 import { supabase } from './lib/supabase';
-import type { Session } from '@supabase/supabase-js';
 
 type Line = 'GK' | 'DEF' | 'MID' | 'ATT';
 
@@ -36,11 +35,12 @@ type Edition = 'worldCup' | 'global';
 type AuthMode = 'signin' | 'signup';
 
 type Profile = {
+  id: string;
   username: string;
 };
 
 type LeaderboardEntry = {
-  user_id: string;
+  player_id: string;
   username: string;
   club_name: string;
   score: number;
@@ -48,10 +48,12 @@ type LeaderboardEntry = {
 };
 
 type SavedGame = {
-  year: number;
-  edition: Edition;
-  countries: string[];
-  selected_ids: string[];
+  player_id: string;
+  username: string;
+  year?: number | null;
+  edition?: Edition | null;
+  countries?: string[] | null;
+  selected_ids?: string[] | null;
 };
 
 const COIN_BUDGET = 15000;
@@ -468,10 +470,6 @@ function normalizeName(value: string) {
 
 function normalizeUsername(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
-}
-
-function authEmailForUsername(username: string) {
-  return `${normalizeUsername(username)}@world-cup-club.local`;
 }
 
 function clubNameForUsername(username: string) {
@@ -1026,11 +1024,11 @@ function useQuietFootballLoop(enabled: boolean, track: MusicTrack) {
 }
 
 export default function App() {
-  const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [authMode, setAuthMode] = useState<AuthMode>('signup');
   const [authUsername, setAuthUsername] = useState('');
   const [authPassword, setAuthPassword] = useState('');
+  const [playerPassword, setPlayerPassword] = useState('');
   const [authMessage, setAuthMessage] = useState('');
   const [authBusy, setAuthBusy] = useState(false);
   const [year, setYear] = useState(2026);
@@ -1093,7 +1091,7 @@ export default function App() {
   async function loadLeaderboard() {
     const { data, error } = await supabase
       .from('leaderboard_entries')
-      .select('user_id, username, club_name, score, updated_at')
+      .select('player_id, username, club_name, score, updated_at')
       .order('score', { ascending: false })
       .order('updated_at', { ascending: true })
       .limit(10);
@@ -1107,24 +1105,11 @@ export default function App() {
     setLeaderboard((data ?? []) as LeaderboardEntry[]);
   }
 
-  async function loadProfileAndSave(nextSession: Session) {
-    const fallbackUsername = nextSession.user.email?.split('@')[0] ?? 'player';
-    const { data: profileData } = await supabase
-      .from('profiles')
-      .select('username')
-      .eq('user_id', nextSession.user.id)
-      .maybeSingle();
+  function enterPlayer(saved: SavedGame, password: string) {
+    setProfile({ id: saved.player_id, username: saved.username });
+    setPlayerPassword(password);
 
-    setProfile({ username: profileData?.username ?? fallbackUsername });
-
-    const { data: saveData } = await supabase
-      .from('game_saves')
-      .select('year, edition, countries, selected_ids')
-      .eq('user_id', nextSession.user.id)
-      .maybeSingle();
-
-    if (saveData) {
-      const saved = saveData as SavedGame;
+    if (saved.year && saved.edition) {
       setYear(saved.year);
       setEdition(saved.edition);
       setCountries(saved.countries ?? []);
@@ -1132,27 +1117,6 @@ export default function App() {
       setSaveMessage('Saved progress loaded.');
     }
   }
-
-  useEffect(() => {
-    let active = true;
-
-    supabase.auth.getSession().then(({ data }) => {
-      if (!active) return;
-      setSession(data.session);
-      if (data.session) void loadProfileAndSave(data.session);
-    });
-
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession);
-      setProfile(null);
-      if (nextSession) void loadProfileAndSave(nextSession);
-    });
-
-    return () => {
-      active = false;
-      authListener.subscription.unsubscribe();
-    };
-  }, []);
 
   useEffect(() => {
     void loadLeaderboard();
@@ -1354,16 +1318,12 @@ export default function App() {
     }
 
     setAuthBusy(true);
-    const email = authEmailForUsername(username);
 
     try {
       if (authMode === 'signup') {
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password: authPassword,
-          options: {
-            data: { username },
-          },
+        const { data, error } = await supabase.rpc('register_game_player', {
+          p_username: username,
+          p_password: authPassword,
         });
 
         if (error) {
@@ -1373,21 +1333,21 @@ export default function App() {
           return;
         }
 
-        if (data.user) {
-          await supabase.from('profiles').upsert({
-            user_id: data.user.id,
-            username,
-            username_normalized: username,
-          });
+        const [createdPlayer] = (data ?? []) as SavedGame[];
+        if (createdPlayer) enterPlayer(createdPlayer, authPassword);
+      } else {
+        const { data, error } = await supabase.rpc('login_game_player', {
+          p_username: username,
+          p_password: authPassword,
+        });
+
+        if (error) {
+          setAuthMessage('Wrong username or password.');
+          return;
         }
 
-        if (!data.session) {
-          setAuthMode('signin');
-          setAuthMessage('Account created. Sign in with the same username and password.');
-        }
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password: authPassword });
-        if (error) setAuthMessage('Wrong username or password.');
+        const [savedPlayer] = (data ?? []) as SavedGame[];
+        if (savedPlayer) enterPlayer(savedPlayer, authPassword);
       }
     } catch {
       setAuthMessage('Something went wrong. Try again.');
@@ -1398,45 +1358,33 @@ export default function App() {
 
   async function signOut() {
     setMusicOn(false);
-    await supabase.auth.signOut();
     setProfile(null);
+    setPlayerPassword('');
+    setAuthPassword('');
     setCountries([]);
     setSelectedIds([]);
     setSaveMessage('');
   }
 
   async function saveProgress() {
-    if (!session || !profile) return;
+    if (!profile || !playerPassword) return;
     setSaving(true);
     setSaveMessage('');
 
     const clubName = clubNameForUsername(profile.username);
-    const savePayload = {
-      user_id: session.user.id,
-      year,
-      edition,
-      countries,
-      selected_ids: selectedIds,
-      score,
-      club_name: clubName,
-      updated_at: new Date().toISOString(),
-    };
+    const { error } = await supabase.rpc('save_game_progress', {
+      p_player_id: profile.id,
+      p_password: playerPassword,
+      p_year: year,
+      p_edition: edition,
+      p_countries: countries,
+      p_selected_ids: selectedIds,
+      p_score: score,
+      p_club_name: clubName,
+    });
 
-    const leaderboardPayload = {
-      user_id: session.user.id,
-      username: profile.username,
-      club_name: clubName,
-      score,
-      updated_at: savePayload.updated_at,
-    };
-
-    const { error: saveError } = await supabase.from('game_saves').upsert(savePayload);
-    const { error: leaderboardSaveError } = await supabase
-      .from('leaderboard_entries')
-      .upsert(leaderboardPayload);
-
-    if (saveError || leaderboardSaveError) {
-      setSaveMessage(saveError?.message ?? leaderboardSaveError?.message ?? 'Save failed.');
+    if (error) {
+      setSaveMessage(error.message);
     } else {
       setSaveMessage('Saved. Your club is on the leaderboard.');
       await loadLeaderboard();
@@ -1445,7 +1393,7 @@ export default function App() {
     setSaving(false);
   }
 
-  if (!session) {
+  if (!profile) {
     return (
       <main className="app-shell auth-shell">
         <section className="auth-card">
@@ -1674,7 +1622,7 @@ export default function App() {
             )}
             <ol className="leaderboard-list">
               {leaderboard.map((entry, index) => (
-                <li key={entry.user_id} className={entry.user_id === session.user.id ? 'current' : ''}>
+                <li key={entry.player_id} className={entry.player_id === profile.id ? 'current' : ''}>
                   <span className="leaderboard-rank">{index + 1}</span>
                   <span>
                     <strong>{entry.club_name}</strong>
