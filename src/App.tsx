@@ -63,6 +63,7 @@ const COPY = {
     moreNeeded: 'more needed',
     optionalSlots: 'optional slots',
     players: 'players',
+    startOver: 'Start over',
     squadLab: 'World Cup squad lab',
     title: 'Build a five-nation 28-man monster.',
     teams: 'teams',
@@ -116,6 +117,7 @@ const COPY = {
     moreNeeded: 'еще нужно',
     optionalSlots: 'дополнительных слота',
     players: 'игроков',
+    startOver: 'Начать заново',
     squadLab: 'Лаборатория состава ЧМ',
     title: 'Собери монстра из 28 игроков.',
     teams: 'команды',
@@ -1171,6 +1173,11 @@ export default function App() {
     setSelectedIds([]);
   }
 
+  function startOver() {
+    setCountries([]);
+    setSelectedIds([]);
+  }
+
   function toggleCountry(country: string) {
     if (countries.includes(country)) {
       setCountries(countries.filter((item) => item !== country));
@@ -1269,6 +1276,9 @@ export default function App() {
           <span className={coinsLeft < 0 ? 'coins danger' : 'coins'}>
             {coinsLeft.toLocaleString()} {copy.coinsLeft}
           </span>
+          <button className="start-over" onClick={startOver} type="button">
+            {copy.startOver}
+          </button>
         </div>
       </section>
 
