@@ -61,6 +61,8 @@ type SavedGame = {
 const COIN_BUDGET = 15000;
 const MIN_COUNTRIES = 3;
 const MAX_COUNTRIES = 5;
+const SCREAMER_INTERVAL_MS = 40_000;
+const SCREAMER_DURATION_MS = 5_000;
 const LINE_REQUIREMENTS: Record<Line, number> = {
   GK: 3,
   DEF: 9,
@@ -922,6 +924,18 @@ const MUSIC_SOURCES: Record<MusicTrack, string> = {
   celebration: '/sounds/celebration.ogg',
 };
 
+function Screamer67({ visible }: { visible: boolean }) {
+  if (!visible) return null;
+
+  return (
+    <div className="screamer-67" role="presentation" aria-hidden="true">
+      <div className="screamer-67-picture">
+        <span>67</span>
+      </div>
+    </div>
+  );
+}
+
 function useQuietFootballLoop(initialTrack: MusicTrack) {
   const [musicOn, setMusicOn] = useState(false);
   const [musicTrack, setMusicTrack] = useState<MusicTrack>(initialTrack);
@@ -1019,6 +1033,7 @@ export default function App() {
   const [saving, setSaving] = useState(false);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [leaderboardError, setLeaderboardError] = useState('');
+  const [showScreamer67, setShowScreamer67] = useState(false);
 
   const qualifiedCountries = WORLD_CUPS[year];
   const availableCountries = edition === 'worldCup'
@@ -1060,6 +1075,16 @@ export default function App() {
     chooseMusicTrack,
     stopMusic,
   } = useQuietFootballLoop('anthem');
+
+  useEffect(() => {
+    const triggerScreamer = () => {
+      setShowScreamer67(true);
+      window.setTimeout(() => setShowScreamer67(false), SCREAMER_DURATION_MS);
+    };
+
+    const intervalId = window.setInterval(triggerScreamer, SCREAMER_INTERVAL_MS);
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   async function loadLeaderboard() {
     const { data, error } = await supabase
@@ -1439,8 +1464,10 @@ export default function App() {
 
   if (!profile) {
     return (
-      <main className="app-shell auth-shell">
-        <section className="auth-card">
+      <>
+        <Screamer67 visible={showScreamer67} />
+        <main className="app-shell auth-shell">
+          <section className="auth-card">
           <p className="eyebrow">World Cup squad lab</p>
           <h1>Register your club.</h1>
           <p className="auth-copy">
@@ -1498,13 +1525,16 @@ export default function App() {
           >
             {authMode === 'signup' ? 'Already registered? Sign in' : 'Need a player? Register'}
           </button>
-        </section>
-      </main>
+          </section>
+        </main>
+      </>
     );
   }
 
   return (
-    <main className={`app-shell theme-${year}`} style={themeStyle}>
+    <>
+      <Screamer67 visible={showScreamer67} />
+      <main className={`app-shell theme-${year}`} style={themeStyle}>
       <section className="hero">
         {selectedLogo && <img className="hero-logo" src={selectedLogo} alt="" />}
         <div>
@@ -1757,6 +1787,7 @@ export default function App() {
           })}
         </div>
       </section>
-    </main>
+      </main>
+    </>
   );
 }
