@@ -385,6 +385,31 @@ button {
   background: var(--theme-c, var(--gold));
 }
 
+.audio-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.audio-controls label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 6px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.audio-controls input[type="range"] {
+  width: 96px;
+}
+
 .edition-toggle {
   display: flex;
   flex-wrap: wrap;
@@ -473,6 +498,27 @@ h2 {
   font-size: 26px;
 }
 
+.club-name-field {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.club-name-field input {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 7px 9px;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 800;
+}
+
 .coins {
   padding: 8px 10px;
   border-radius: 8px;
@@ -532,6 +578,12 @@ h2 {
   max-width: 190px;
   text-align: right;
   font-weight: 800;
+  line-height: 1.2;
+}
+
+.last-saved {
+  max-width: 190px;
+  text-align: right;
   line-height: 1.2;
 }
 
@@ -780,6 +832,55 @@ button:disabled {
   font-size: 13px;
 }
 
+.squad-warning {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid #f0d98b;
+  border-radius: 8px;
+  color: #6d5311;
+  background: #fff8df;
+  font-weight: 900;
+}
+
+.my-team-card {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.my-team-list {
+  display: grid;
+  gap: 7px;
+  max-height: 280px;
+  overflow: auto;
+}
+
+.my-team-list button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 7px 9px;
+  color: var(--ink);
+  background: #f6f8f7;
+  cursor: pointer;
+}
+
+.my-team-list span {
+  overflow-wrap: anywhere;
+  text-align: left;
+  font-weight: 800;
+}
+
+.my-team-list em {
+  color: var(--grass-dark);
+  font-style: normal;
+  font-weight: 900;
+}
+
 .leaderboard-card {
   margin-top: 16px;
   padding-top: 16px;
@@ -849,8 +950,38 @@ button:disabled {
   color: var(--grass-dark);
 }
 
+.leaderboard-card select,
+.draft-filters select,
+.draft-filters input:not([type="range"]) {
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 7px 9px;
+  color: var(--ink);
+  background: white;
+  font: inherit;
+  font-weight: 800;
+}
+
 .players-panel {
   margin-bottom: 22px;
+}
+
+.draft-filters {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 150px minmax(180px, 260px);
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.draft-filters label {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
 }
 
 .everything-panel {
@@ -1079,7 +1210,8 @@ button:disabled {
   }
 
   .country-grid,
-  .player-grid {
+  .player-grid,
+  .draft-filters {
     grid-template-columns: 1fr;
   }
 

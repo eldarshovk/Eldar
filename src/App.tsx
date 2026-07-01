@@ -34,6 +34,8 @@ type Lang = 'en' | 'ru';
 type MusicTrack = 'anthem' | 'drums' | 'chant' | 'celebration';
 type Edition = 'worldCup' | 'global';
 type AuthMode = 'signin' | 'signup';
+type LeaderboardFilter = 'all' | Edition;
+type LineFilter = 'ALL' | Line;
 
 type Profile = {
   id: string;
@@ -45,6 +47,7 @@ type LeaderboardEntry = {
   player_id: string;
   username: string;
   club_name: string;
+  edition: Edition | null;
   score: number;
   updated_at: string;
 };
@@ -52,6 +55,8 @@ type LeaderboardEntry = {
 type SavedGame = {
   player_id: string;
   username: string;
+  club_name?: string | null;
+  updated_at?: string | null;
   year?: number | null;
   edition?: Edition | null;
   countries?: string[] | null;
@@ -502,6 +507,16 @@ function squadScore(selectedPlayers: Player[]) {
   const overall = average(selectedPlayers.map((player) => player.overall));
   const completionBonus = selectedPlayers.length === REQUIRED_PLAYERS ? 120 : selectedPlayers.length * 2;
   return Math.round(overall * 10 + attack + midfield + defense + completionBonus);
+}
+
+function formatSavedAt(value: string | null) {
+  if (!value) return 'Not saved yet';
+  return new Intl.DateTimeFormat('en', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(value));
 }
 
 function positionToLine(position: string): Line | null {
@@ -961,7 +976,7 @@ function Screamer({ kind }: { kind: ScreamerKind | null }) {
   );
 }
 
-function useQuietFootballLoop(initialTrack: MusicTrack) {
+function useQuietFootballLoop(initialTrack: MusicTrack, volume: number) {
   const [musicOn, setMusicOn] = useState(false);
   const [musicTrack, setMusicTrack] = useState<MusicTrack>(initialTrack);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -982,7 +997,7 @@ function useQuietFootballLoop(initialTrack: MusicTrack) {
       stopCurrentAudio();
       audioRef.current = new Audio(nextSource);
       audioRef.current.loop = true;
-      audioRef.current.volume = nextTrack === 'chant' || nextTrack === 'celebration' ? 0.42 : 0.34;
+      audioRef.current.volume = volume;
       audioRef.current.preload = 'auto';
     }
 
@@ -1020,6 +1035,12 @@ function useQuietFootballLoop(initialTrack: MusicTrack) {
     [],
   );
 
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = volume;
+    }
+  }, [volume]);
+
   return {
     musicOn,
     musicTrack,
@@ -1044,6 +1065,14 @@ export default function App() {
   const [edition, setEdition] = useState<Edition>('worldCup');
   const [countries, setCountries] = useState<string[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [clubName, setClubName] = useState('');
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+  const [playerSearch, setPlayerSearch] = useState('');
+  const [lineFilter, setLineFilter] = useState<LineFilter>('ALL');
+  const [maxCostFilter, setMaxCostFilter] = useState(COIN_BUDGET);
+  const [leaderboardFilter, setLeaderboardFilter] = useState<LeaderboardFilter>('all');
+  const [musicVolume, setMusicVolume] = useState(0.36);
+  const [screamersEnabled, setScreamersEnabled] = useState(true);
   const [squadsByYear, setSquadsByYear] = useState<Record<number, SquadMap>>({});
   const [globalSquads, setGlobalSquads] = useState<SquadMap>({});
   const [photos, setPhotos] = useState<PhotoMap>({});
@@ -1087,6 +1116,17 @@ export default function App() {
       }),
     [countries, currentClubs, edition, globalSquads, photos, squads, year],
   );
+  const filteredPlayerPool = useMemo(() => {
+    const search = normalizeName(playerSearch);
+
+    return playerPool.filter((player) => {
+      const matchesSearch = !search
+        || normalizeName(`${player.name} ${player.country} ${player.club}`).includes(search);
+      const matchesLine = lineFilter === 'ALL' || player.line === lineFilter;
+      const matchesCost = player.cost <= maxCostFilter;
+      return matchesSearch && matchesLine && matchesCost;
+    });
+  }, [lineFilter, maxCostFilter, playerPool, playerSearch]);
   const selectedPlayers = playerPool.filter((player) => selectedIds.includes(player.id));
   const selectedCost = selectedPlayers.reduce((sum, player) => sum + player.cost, 0);
   const coinsLeft = COIN_BUDGET - selectedCost;
@@ -1094,10 +1134,18 @@ export default function App() {
   const copy = COPY[lang];
   const read = squadRead(selectedPlayers, lang);
   const isSigmaAdmin = profile?.provider === 'password' && normalizeUsername(profile.username) === 'sigma';
+  const visibleLeaderboard = leaderboard.filter((entry) => {
+    if (leaderboardFilter === 'all') return true;
+    return entry.edition === leaderboardFilter;
+  });
   const lineCounts = selectedPlayers.reduce<Record<Line, number>>(
     (counts, player) => ({ ...counts, [player.line]: counts[player.line] + 1 }),
     { GK: 0, DEF: 0, MID: 0, ATT: 0 },
   );
+  const missingLineText = (Object.keys(LINE_REQUIREMENTS) as Line[])
+    .filter((line) => lineCounts[line] < LINE_REQUIREMENTS[line])
+    .map((line) => `${LINE_REQUIREMENTS[line] - lineCounts[line]} ${line}`)
+    .join(', ');
 
   const {
     musicOn,
@@ -1105,10 +1153,11 @@ export default function App() {
     toggleMusic,
     chooseMusicTrack,
     stopMusic,
-  } = useQuietFootballLoop('anthem');
+  } = useQuietFootballLoop('anthem', musicVolume);
 
   useEffect(() => {
     const triggerScreamer = () => {
+      if (!screamersEnabled) return;
       const nextKind = screamerTurnRef.current;
       screamerTurnRef.current = nextKind === 'sixtySeven' ? 'ronaldo' : 'sixtySeven';
       setScreamerKind(nextKind);
@@ -1117,12 +1166,12 @@ export default function App() {
 
     const intervalId = window.setInterval(triggerScreamer, SCREAMER_INTERVAL_MS);
     return () => window.clearInterval(intervalId);
-  }, []);
+  }, [screamersEnabled]);
 
   async function loadLeaderboard() {
     const { data, error } = await supabase
       .from('leaderboard_entries')
-      .select('player_id, username, club_name, score, updated_at')
+      .select('player_id, username, club_name, edition, score, updated_at')
       .order('score', { ascending: false })
       .order('updated_at', { ascending: true })
       .limit(10);
@@ -1139,6 +1188,8 @@ export default function App() {
   function enterPlayer(saved: SavedGame, provider: Profile['provider'], password = '') {
     setProfile({ id: saved.player_id, username: saved.username, provider });
     setPlayerPassword(password);
+    setClubName(saved.club_name ?? clubNameForUsername(saved.username));
+    setLastSavedAt(saved.updated_at ?? null);
 
     if (saved.year && saved.edition) {
       setYear(saved.year);
@@ -1473,6 +1524,8 @@ export default function App() {
     setGoogleSession(null);
     setPlayerPassword('');
     setAuthPassword('');
+    setClubName('');
+    setLastSavedAt(null);
     setCountries([]);
     setSelectedIds([]);
     setSaveMessage('');
@@ -1486,7 +1539,8 @@ export default function App() {
     setSaving(true);
     setSaveMessage('');
 
-    const clubName = clubNameForUsername(profile.username);
+    const savedAt = new Date().toISOString();
+    const cleanClubName = clubName.trim() || clubNameForUsername(profile.username);
     const { error } = profile.provider === 'google'
       ? await supabase.rpc('save_google_game_progress', {
         p_player_id: profile.id,
@@ -1495,7 +1549,7 @@ export default function App() {
         p_countries: countries,
         p_selected_ids: selectedIds,
         p_score: score,
-        p_club_name: clubName,
+        p_club_name: cleanClubName,
       })
       : await supabase.rpc('save_game_progress', {
         p_player_id: profile.id,
@@ -1505,12 +1559,14 @@ export default function App() {
         p_countries: countries,
         p_selected_ids: selectedIds,
         p_score: score,
-        p_club_name: clubName,
+        p_club_name: cleanClubName,
       });
 
     if (error) {
       setSaveMessage(error.message);
     } else {
+      setClubName(cleanClubName);
+      setLastSavedAt(savedAt);
       setSaveMessage('Saved. Your club is on the leaderboard.');
       await loadLeaderboard();
     }
@@ -1620,6 +1676,30 @@ export default function App() {
           >
             {musicOn ? copy.musicOn : copy.musicOff}
           </button>
+          <div className="audio-controls">
+            <label>
+              Volume
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={musicVolume}
+                onChange={(event) => setMusicVolume(Number(event.target.value))}
+              />
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={screamersEnabled}
+                onChange={(event) => {
+                  setScreamersEnabled(event.target.checked);
+                  if (!event.target.checked) setScreamerKind(null);
+                }}
+              />
+              Screamers
+            </label>
+          </div>
           <div className="edition-toggle">
             <button
               className={edition === 'global' ? 'active' : ''}
@@ -1651,6 +1731,14 @@ export default function App() {
         </div>
         <div className="scoreboard">
           <span>Player: {profile?.username ?? 'loading'}</span>
+          <label className="club-name-field">
+            Club
+            <input
+              value={clubName}
+              onChange={(event) => setClubName(event.target.value)}
+              placeholder={profile ? clubNameForUsername(profile.username) : 'My Club'}
+            />
+          </label>
           <span>{countries.length}/{MAX_COUNTRIES} {copy.countryCount}</span>
           <strong>{selectedPlayers.length}/{REQUIRED_PLAYERS} {copy.players}</strong>
           <span className="score-pill">{score.toLocaleString()} score</span>
@@ -1660,6 +1748,7 @@ export default function App() {
           <button className="save-button" onClick={saveProgress} disabled={saving} type="button">
             {saving ? 'Saving...' : 'Save'}
           </button>
+          <span className="last-saved">Last saved: {formatSavedAt(lastSavedAt)}</span>
           <button className="start-over" onClick={startOver} type="button">
             {copy.startOver}
           </button>
@@ -1747,6 +1836,9 @@ export default function App() {
             </span>
           </div>
           <p className="verdict-copy">{read.text}</p>
+          {missingLineText && selectedPlayers.length > 0 && (
+            <p className="squad-warning">Need: {missingLineText}</p>
+          )}
           <div className="line-meter">
             {(['GK', 'DEF', 'MID', 'ATT'] as Line[]).map((line) => (
               <span key={line}>
@@ -1755,17 +1847,42 @@ export default function App() {
               </span>
             ))}
           </div>
+          <div className="my-team-card">
+            <div className="section-title">
+              <h2>My Team</h2>
+              <p>{selectedPlayers.length}/{REQUIRED_PLAYERS}</p>
+            </div>
+            {selectedPlayers.length === 0 ? (
+              <p className="leaderboard-empty">Pick players to build your club.</p>
+            ) : (
+              <div className="my-team-list">
+                {selectedPlayers.map((player) => (
+                  <button key={player.id} onClick={() => togglePlayer(player.id)} type="button">
+                    <span>{player.name}</span>
+                    <em>{player.line}</em>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <div className="leaderboard-card">
             <div className="section-title">
               <h2>Best Clubs</h2>
-              <p>Top 10</p>
+              <select
+                value={leaderboardFilter}
+                onChange={(event) => setLeaderboardFilter(event.target.value as LeaderboardFilter)}
+              >
+                <option value="all">All</option>
+                <option value="worldCup">World Cup</option>
+                <option value="global">Global</option>
+              </select>
             </div>
             {leaderboardError && <p className="data-message">{leaderboardError}</p>}
-            {!leaderboardError && leaderboard.length === 0 && (
+            {!leaderboardError && visibleLeaderboard.length === 0 && (
               <p className="leaderboard-empty">Save a team to enter the race.</p>
             )}
             <ol className="leaderboard-list">
-              {leaderboard.map((entry, index) => (
+              {visibleLeaderboard.map((entry, index) => (
                 <li key={entry.player_id} className={entry.player_id === profile.id ? 'current' : ''}>
                   <span className="leaderboard-rank">{index + 1}</span>
                   <span>
@@ -1831,6 +1948,31 @@ export default function App() {
                 : copy.chooseCountries}
             </p>
           </div>
+        <div className="draft-filters">
+          <input
+            value={playerSearch}
+            onChange={(event) => setPlayerSearch(event.target.value)}
+            placeholder="Search player, country, club"
+          />
+          <select value={lineFilter} onChange={(event) => setLineFilter(event.target.value as LineFilter)}>
+            <option value="ALL">All positions</option>
+            <option value="GK">GK</option>
+            <option value="DEF">DEF</option>
+            <option value="MID">MID</option>
+            <option value="ATT">ATT</option>
+          </select>
+          <label>
+            Max cost {maxCostFilter.toLocaleString()}
+            <input
+              type="range"
+              min="300"
+              max={COIN_BUDGET}
+              step="100"
+              value={maxCostFilter}
+              onChange={(event) => setMaxCostFilter(Number(event.target.value))}
+            />
+          </label>
+        </div>
         {squadError && <p className="data-message">{squadError}</p>}
         {!squadError && loadingYear === year && (
           <p className="data-message">{copy.loadingSquadsLong}</p>
@@ -1845,7 +1987,7 @@ export default function App() {
           <p className="data-message">{copy.loadingClubs}</p>
         )}
         <div className="player-grid">
-          {playerPool.map((player) => {
+          {filteredPlayerPool.map((player) => {
             const selected = selectedIds.includes(player.id);
             const tooExpensive = selectedCost + player.cost > COIN_BUDGET;
             const lineFull = lineCounts[player.line] >= LINE_REQUIREMENTS[player.line];
