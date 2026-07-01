@@ -103,6 +103,69 @@ button {
   text-shadow: 0 3px 0 #111;
 }
 
+.tutorial-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(6, 18, 14, 0.72);
+}
+
+.tutorial-card {
+  width: min(560px, 100%);
+  border: 1px solid rgba(255, 255, 255, 0.52);
+  border-radius: 8px;
+  padding: 24px;
+  color: white;
+  background:
+    linear-gradient(rgba(8, 26, 22, 0.88), rgba(8, 26, 22, 0.94)),
+    repeating-linear-gradient(90deg, var(--theme-a, #1677c8) 0 80px, var(--theme-b, #19a45b) 80px 160px);
+  box-shadow: 0 24px 90px rgba(0, 0, 0, 0.42);
+}
+
+.tutorial-card h2 {
+  margin-top: 4px;
+  font-size: clamp(28px, 5vw, 44px);
+}
+
+.tutorial-steps {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.tutorial-steps span {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-height: 48px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.12);
+  font-weight: 800;
+}
+
+.tutorial-steps strong {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  color: var(--ink);
+  background: var(--theme-c, var(--gold));
+}
+
+.tutorial-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  margin-top: 18px;
+}
+
 @keyframes screamerPop {
   0% {
     transform: scale(0.55) rotate(-8deg);

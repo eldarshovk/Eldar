@@ -82,6 +82,7 @@ const MIN_COUNTRIES = 3;
 const MAX_COUNTRIES = 5;
 const SCREAMER_INTERVAL_MS = 60_000;
 const SCREAMER_DURATION_MS = 5_000;
+const TUTORIAL_STORAGE_KEY = 'world-cup-squad-lab-hide-tutorial';
 const LINE_REQUIREMENTS: Record<Line, number> = {
   GK: 3,
   DEF: 9,
@@ -976,6 +977,49 @@ function Screamer({ kind }: { kind: ScreamerKind | null }) {
   );
 }
 
+function TutorialModal({
+  onClose,
+  onNeverShowAgain,
+}: {
+  onClose: () => void;
+  onNeverShowAgain: () => void;
+}) {
+  return (
+    <div className="tutorial-overlay" role="dialog" aria-modal="true" aria-labelledby="tutorial-title">
+      <section className="tutorial-card">
+        <p className="eyebrow">Kickoff guide</p>
+        <h2 id="tutorial-title">Build your monster club.</h2>
+        <div className="tutorial-steps">
+          <span>
+            <strong>1</strong>
+            Pick 3 to 5 countries.
+          </span>
+          <span>
+            <strong>2</strong>
+            Draft 28 players while staying inside the coin budget.
+          </span>
+          <span>
+            <strong>3</strong>
+            Balance GK, DEF, MID, and ATT to unlock a stronger verdict.
+          </span>
+          <span>
+            <strong>4</strong>
+            Save your club to enter the Best Clubs leaderboard.
+          </span>
+        </div>
+        <div className="tutorial-actions">
+          <button className="save-button" onClick={onClose} type="button">
+            Start playing
+          </button>
+          <button className="sign-out" onClick={onNeverShowAgain} type="button">
+            Never show this again
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function useQuietFootballLoop(initialTrack: MusicTrack, volume: number) {
   const [musicOn, setMusicOn] = useState(false);
   const [musicTrack, setMusicTrack] = useState<MusicTrack>(initialTrack);
@@ -1092,6 +1136,7 @@ export default function App() {
   const [everythingOpen, setEverythingOpen] = useState(false);
   const [everythingLoading, setEverythingLoading] = useState(false);
   const [screamerKind, setScreamerKind] = useState<ScreamerKind | null>(null);
+  const [tutorialOpen, setTutorialOpen] = useState(false);
   const screamerTurnRef = useRef<ScreamerKind>('sixtySeven');
 
   const qualifiedCountries = WORLD_CUPS[year];
@@ -1190,6 +1235,7 @@ export default function App() {
     setPlayerPassword(password);
     setClubName(saved.club_name ?? clubNameForUsername(saved.username));
     setLastSavedAt(saved.updated_at ?? null);
+    setTutorialOpen(window.localStorage.getItem(TUTORIAL_STORAGE_KEY) !== 'true');
 
     if (saved.year && saved.edition) {
       setYear(saved.year);
@@ -1198,6 +1244,11 @@ export default function App() {
       setSelectedIds(saved.selected_ids ?? []);
       setSaveMessage('Saved progress loaded.');
     }
+  }
+
+  function neverShowTutorialAgain() {
+    window.localStorage.setItem(TUTORIAL_STORAGE_KEY, 'true');
+    setTutorialOpen(false);
   }
 
   async function enterGooglePlayer(nextSession: Session) {
@@ -1532,6 +1583,7 @@ export default function App() {
     setEverythingRows([]);
     setEverythingError('');
     setEverythingOpen(false);
+    setTutorialOpen(false);
   }
 
   async function saveProgress() {
@@ -1646,6 +1698,12 @@ export default function App() {
   return (
     <>
       <Screamer kind={screamerKind} />
+      {tutorialOpen && (
+        <TutorialModal
+          onClose={() => setTutorialOpen(false)}
+          onNeverShowAgain={neverShowTutorialAgain}
+        />
+      )}
       <main className={`app-shell theme-${year}`} style={themeStyle}>
       <section className="hero">
         {selectedLogo && <img className="hero-logo" src={selectedLogo} alt="" />}
