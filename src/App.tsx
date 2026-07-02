@@ -36,6 +36,7 @@ type Edition = 'worldCup' | 'global';
 type AuthMode = 'signin' | 'signup';
 type LeaderboardFilter = 'all' | Edition;
 type LineFilter = 'ALL' | Line;
+type Tactic = '4-3-3' | '4-4-2' | '3-5-2' | '4-2-3-1' | '5-3-2';
 type GeminiRole = 'user' | 'assistant';
 
 type GeminiMessage = {
@@ -101,6 +102,33 @@ const LINE_REQUIREMENTS: Record<Line, number> = {
   ATT: 8,
 };
 const REQUIRED_PLAYERS = Object.values(LINE_REQUIREMENTS).reduce((sum, count) => sum + count, 0);
+const TACTICS: Record<Tactic, { title: string; text: string; lines: Record<'DEF' | 'MID' | 'ATT', number> }> = {
+  '4-3-3': {
+    title: 'Wide attack',
+    text: 'Four defenders, three midfielders, and three forwards. Great for wingers and pressing.',
+    lines: { DEF: 4, MID: 3, ATT: 3 },
+  },
+  '4-4-2': {
+    title: 'Classic balance',
+    text: 'Two banks of four with two strikers. Simple, compact, and strong for counters.',
+    lines: { DEF: 4, MID: 4, ATT: 2 },
+  },
+  '3-5-2': {
+    title: 'Midfield control',
+    text: 'Three defenders, five midfielders, and two forwards. Best when you want to own the center.',
+    lines: { DEF: 3, MID: 5, ATT: 2 },
+  },
+  '4-2-3-1': {
+    title: 'Modern control',
+    text: 'A back four, two holding mids, three creators, and one striker. Stable and flexible.',
+    lines: { DEF: 4, MID: 5, ATT: 1 },
+  },
+  '5-3-2': {
+    title: 'Defensive wall',
+    text: 'Five defenders, three midfielders, and two forwards. Built to survive pressure.',
+    lines: { DEF: 5, MID: 3, ATT: 2 },
+  },
+};
 const GEMINI_SUGGESTIONS = [
   'Recommend my next 5 players',
   'What is my weakest position?',
@@ -1128,6 +1156,7 @@ export default function App() {
   const [year, setYear] = useState(2026);
   const [lang, setLang] = useState<Lang>('en');
   const [edition, setEdition] = useState<Edition>('worldCup');
+  const [tactic, setTactic] = useState<Tactic>('4-3-3');
   const [countries, setCountries] = useState<string[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [clubName, setClubName] = useState('');
@@ -1683,6 +1712,7 @@ export default function App() {
             'Keep answers short, practical, and friendly. Include why each player helps the squad.',
             'Do not use markdown or asterisks. If you need emphasis, use double quote marks instead.',
             `Current edition: ${edition}. Year: ${year}.`,
+            `Chosen tactic: ${tactic} (${TACTICS[tactic].title}).`,
             `Selected countries: ${countries.length ? countries.join(', ') : 'none'}.`,
             `Selected players: ${selectedSummary}`,
             `Available draft players within current filters and budget: ${availableSummary || 'Choose at least three countries to load available players.'}`,
@@ -1991,6 +2021,29 @@ export default function App() {
             );
           })}
         </div>
+      </section>
+
+      <section className="panel tactics-panel">
+        <div className="section-title">
+          <h2>Tactic</h2>
+          <p>{TACTICS[tactic].title}</p>
+        </div>
+        <div className="tactic-grid" role="radiogroup" aria-label="Choose tactic">
+          {(Object.keys(TACTICS) as Tactic[]).map((item) => (
+            <button
+              key={item}
+              className={item === tactic ? 'tactic-choice active' : 'tactic-choice'}
+              onClick={() => setTactic(item)}
+              type="button"
+            >
+              <strong>{item}</strong>
+              <span>
+                {TACTICS[item].lines.DEF} DEF / {TACTICS[item].lines.MID} MID / {TACTICS[item].lines.ATT} ATT
+              </span>
+            </button>
+          ))}
+        </div>
+        <p className="tactic-read">{TACTICS[tactic].text}</p>
       </section>
 
       <section className="layout">

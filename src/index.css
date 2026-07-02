@@ -695,6 +695,10 @@ h2 {
   margin-bottom: 18px;
 }
 
+.tactics-panel {
+  margin-bottom: 18px;
+}
+
 .section-title {
   display: flex;
   align-items: baseline;
@@ -739,6 +743,7 @@ h2 {
 }
 
 .year-tabs button,
+.tactic-choice,
 .country,
 .player {
   min-height: 42px;
@@ -751,6 +756,7 @@ h2 {
 }
 
 .year-tabs button:hover,
+.tactic-choice:hover,
 .country:hover,
 .player:hover {
   transform: translateY(-1px);
@@ -758,11 +764,49 @@ h2 {
 }
 
 .year-tabs button.active,
+.tactic-choice.active,
 .country.selected,
 .player.selected {
   border-color: var(--grass-dark);
   color: white;
   background: var(--ink);
+}
+
+.tactic-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.tactic-choice {
+  display: grid;
+  gap: 5px;
+  align-content: center;
+  min-height: 76px;
+  padding: 10px;
+  text-align: left;
+}
+
+.tactic-choice strong {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.tactic-choice span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.tactic-choice.active span {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.tactic-read {
+  margin-top: 12px;
+  color: var(--muted);
+  font-weight: 800;
+  line-height: 1.35;
 }
 
 button:disabled {
@@ -1414,6 +1458,10 @@ button:disabled {
 
   .year-tabs {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .tactic-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .verdict-panel {
