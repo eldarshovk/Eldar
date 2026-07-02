@@ -6,10 +6,10 @@
 //   2) Положи его в секрет:  npm run ai:secret -- GEMINI_API_KEY=твой_ключ
 //   3) Задеплой функцию:     npm run ai:deploy
 //
-// Модель можно поменять (gemini-2.0-flash — быстрая и бесплатная).
+// Модель можно поменять, если Google обновит список доступных Gemini моделей.
 
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
-const MODEL = 'gemini-2.0-flash';
+const MODEL = 'gemini-2.5-flash';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -39,6 +39,10 @@ Deno.serve(async (req) => {
     );
 
     const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data?.error?.message ?? `Gemini request failed with status ${res.status}`);
+    }
+
     const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
     return new Response(JSON.stringify({ text }), {
       headers: { ...cors, 'Content-Type': 'application/json' },
