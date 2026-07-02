@@ -108,6 +108,10 @@ const GEMINI_SUGGESTIONS = [
   'Which formation fits this squad?',
 ];
 
+function cleanGeminiText(text: string) {
+  return text.replace(/\*/g, '"');
+}
+
 const COPY = {
   en: {
     attack: 'attack',
@@ -1677,6 +1681,7 @@ export default function App() {
             'You are an AI football coach and chatbot inside a World Cup squad builder game.',
             'Answer football questions clearly. When asked for recommendations, recommend specific players from the available draft list when possible.',
             'Keep answers short, practical, and friendly. Include why each player helps the squad.',
+            'Do not use markdown or asterisks. If you need emphasis, use double quote marks instead.',
             `Current edition: ${edition}. Year: ${year}.`,
             `Selected countries: ${countries.length ? countries.join(', ') : 'none'}.`,
             `Selected players: ${selectedSummary}`,
@@ -1693,7 +1698,7 @@ export default function App() {
 
       setGeminiMessages((messages) => [
         ...messages,
-        { role: 'assistant', text: data?.text?.trim() || 'I could not get an answer this time.' },
+        { role: 'assistant', text: cleanGeminiText(data?.text?.trim() || 'I could not get an answer this time.') },
       ]);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Gemini is not available right now.';
