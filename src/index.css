@@ -607,6 +607,7 @@ h2 {
 .start-over,
 .save-button,
 .everything-button,
+.gemini-button,
 .sign-out {
   width: 100%;
   min-height: 36px;
@@ -629,6 +630,16 @@ h2 {
   background: #39393b;
 }
 
+.gemini-button {
+  color: white;
+  background: #2364aa;
+}
+
+.gemini-button.active {
+  color: var(--ink);
+  background: #f5f5f5;
+}
+
 .sign-out {
   color: var(--ink);
   background: white;
@@ -649,6 +660,23 @@ h2 {
   max-width: 190px;
   text-align: right;
   line-height: 1.2;
+}
+
+.scroll-top-button {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 8000;
+  min-width: 58px;
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: white;
+  background: var(--ink);
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 12px 30px rgba(17, 17, 17, 0.18);
 }
 
 .panel {
@@ -1029,6 +1057,114 @@ button:disabled {
   margin-bottom: 22px;
 }
 
+.gemini-panel {
+  margin-bottom: 18px;
+}
+
+.gemini-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.gemini-suggestions button {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 11px;
+  color: var(--ink);
+  background: white;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.gemini-suggestions button:hover {
+  border-color: var(--ink);
+}
+
+.gemini-thread {
+  display: grid;
+  gap: 10px;
+  max-height: 320px;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--line);
+  background: #f5f5f5;
+}
+
+.gemini-empty {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.gemini-message {
+  display: grid;
+  gap: 4px;
+  max-width: min(720px, 100%);
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  background: white;
+  font-weight: 800;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.gemini-message strong {
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.gemini-message.user {
+  justify-self: end;
+  color: white;
+  background: var(--ink);
+}
+
+.gemini-message.user strong {
+  color: rgba(255, 255, 255, 0.76);
+}
+
+.gemini-error {
+  margin-top: 10px;
+  color: var(--danger);
+  font-weight: 900;
+}
+
+.gemini-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.gemini-form input {
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  padding: 9px 14px;
+  color: var(--ink);
+  background: white;
+  font: inherit;
+  font-weight: 800;
+}
+
+.gemini-form button {
+  min-width: 92px;
+  min-height: 42px;
+  border: 0;
+  border-radius: 999px;
+  color: white;
+  background: var(--ink);
+  font-weight: 900;
+  cursor: pointer;
+}
+
 .draft-filters {
   display: grid;
   grid-template-columns: minmax(180px, 1fr) 150px minmax(180px, 260px);
@@ -1092,6 +1228,38 @@ button:disabled {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(236px, 1fr));
   gap: 18px;
+}
+
+.bottom-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(130px, 170px) minmax(130px, 170px);
+  gap: 10px;
+  align-items: center;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.bottom-actions span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.bottom-actions strong {
+  font-size: 18px;
+}
+
+.bottom-actions em {
+  color: var(--muted);
+  font-style: normal;
+  font-weight: 900;
+}
+
+.bottom-actions p {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-weight: 800;
 }
 
 .player {
@@ -1281,8 +1449,15 @@ button:disabled {
 
   .country-grid,
   .player-grid,
-  .draft-filters {
+  .draft-filters,
+  .gemini-form,
+  .bottom-actions {
     grid-template-columns: 1fr;
+  }
+
+  .scroll-top-button {
+    right: 12px;
+    bottom: 12px;
   }
 
   .line-meter {

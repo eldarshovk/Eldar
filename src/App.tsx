@@ -36,6 +36,17 @@ type Edition = 'worldCup' | 'global';
 type AuthMode = 'signin' | 'signup';
 type LeaderboardFilter = 'all' | Edition;
 type LineFilter = 'ALL' | Line;
+type GeminiRole = 'user' | 'assistant';
+
+type GeminiMessage = {
+  role: GeminiRole;
+  text: string;
+};
+
+type GeminiResponse = {
+  text?: string;
+  error?: string;
+};
 
 type Profile = {
   id: string;
@@ -90,6 +101,12 @@ const LINE_REQUIREMENTS: Record<Line, number> = {
   ATT: 8,
 };
 const REQUIRED_PLAYERS = Object.values(LINE_REQUIREMENTS).reduce((sum, count) => sum + count, 0);
+const GEMINI_SUGGESTIONS = [
+  'Recommend my next 5 players',
+  'What is my weakest position?',
+  'Explain false nine in simple words',
+  'Which formation fits this squad?',
+];
 
 const COPY = {
   en: {
@@ -1137,6 +1154,11 @@ export default function App() {
   const [everythingLoading, setEverythingLoading] = useState(false);
   const [screamerKind, setScreamerKind] = useState<ScreamerKind | null>(null);
   const [tutorialOpen, setTutorialOpen] = useState(false);
+  const [geminiOpen, setGeminiOpen] = useState(false);
+  const [geminiPrompt, setGeminiPrompt] = useState('');
+  const [geminiMessages, setGeminiMessages] = useState<GeminiMessage[]>([]);
+  const [geminiBusy, setGeminiBusy] = useState(false);
+  const [geminiError, setGeminiError] = useState('');
   const screamerTurnRef = useRef<ScreamerKind>('sixtySeven');
 
   const qualifiedCountries = WORLD_CUPS[year];
@@ -1626,6 +1648,69 @@ export default function App() {
     setSaving(false);
   }
 
+  async function askGemini(event?: FormEvent, suggestedPrompt?: string) {
+    event?.preventDefault();
+    const prompt = (suggestedPrompt ?? geminiPrompt).trim();
+    if (!prompt || geminiBusy) return;
+
+    const userMessage: GeminiMessage = { role: 'user', text: prompt };
+    setGeminiMessages((messages) => [...messages, userMessage]);
+    setGeminiPrompt('');
+    setGeminiBusy(true);
+    setGeminiError('');
+
+    const selectedSummary = selectedPlayers.length
+      ? selectedPlayers
+        .map((player) => `${player.name} (${player.line}, ${player.country}, OVR ${player.overall}, cost ${player.cost})`)
+        .join('; ')
+      : 'No players selected yet.';
+    const availableSummary = filteredPlayerPool
+      .filter((player) => !selectedIds.includes(player.id) && selectedCost + player.cost <= COIN_BUDGET)
+      .slice(0, 45)
+      .map((player) => `${player.name} (${player.line}, ${player.country}, ${player.club}, OVR ${player.overall}, cost ${player.cost})`)
+      .join('; ');
+
+    try {
+      const { data, error } = await supabase.functions.invoke<GeminiResponse>('ai', {
+        body: {
+          system: [
+            'You are an AI football coach and chatbot inside a World Cup squad builder game.',
+            'Answer football questions clearly. When asked for recommendations, recommend specific players from the available draft list when possible.',
+            'Keep answers short, practical, and friendly. Include why each player helps the squad.',
+            `Current edition: ${edition}. Year: ${year}.`,
+            `Selected countries: ${countries.length ? countries.join(', ') : 'none'}.`,
+            `Selected players: ${selectedSummary}`,
+            `Available draft players within current filters and budget: ${availableSummary || 'Choose at least three countries to load available players.'}`,
+            `Score: ${score}. Coins left: ${coinsLeft}.`,
+            `Line counts: GK ${lineCounts.GK}/${LINE_REQUIREMENTS.GK}, DEF ${lineCounts.DEF}/${LINE_REQUIREMENTS.DEF}, MID ${lineCounts.MID}/${LINE_REQUIREMENTS.MID}, ATT ${lineCounts.ATT}/${LINE_REQUIREMENTS.ATT}.`,
+          ].join('\n'),
+          prompt,
+        },
+      });
+
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error);
+
+      setGeminiMessages((messages) => [
+        ...messages,
+        { role: 'assistant', text: data?.text?.trim() || 'I could not get an answer this time.' },
+      ]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Gemini is not available right now.';
+      setGeminiError(message);
+      setGeminiMessages((messages) => [
+        ...messages,
+        { role: 'assistant', text: 'Gemini could not answer yet. Check the API key secret and deployed Edge Function.' },
+      ]);
+    } finally {
+      setGeminiBusy(false);
+    }
+  }
+
+  function scrollToTop() {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
   if (!profile) {
     return (
       <>
@@ -1704,6 +1789,9 @@ export default function App() {
           onNeverShowAgain={neverShowTutorialAgain}
         />
       )}
+      <button className="scroll-top-button" onClick={scrollToTop} type="button">
+        Top
+      </button>
       <main className={`app-shell theme-${year}`} style={themeStyle}>
       <section className="hero">
         {selectedLogo && <img className="hero-logo" src={selectedLogo} alt="" />}
@@ -1810,6 +1898,13 @@ export default function App() {
           <button className="start-over" onClick={startOver} type="button">
             {copy.startOver}
           </button>
+          <button
+            className={geminiOpen ? 'gemini-button active' : 'gemini-button'}
+            onClick={() => setGeminiOpen((open) => !open)}
+            type="button"
+          >
+            AI Coach
+          </button>
           {isSigmaAdmin && (
             <button className="everything-button" onClick={loadEverything} disabled={everythingLoading} type="button">
               {everythingLoading ? 'Loading...' : 'Everything'}
@@ -1821,6 +1916,50 @@ export default function App() {
           {saveMessage && <span className="save-message">{saveMessage}</span>}
         </div>
       </section>
+
+      {geminiOpen && (
+        <section className="panel gemini-panel">
+          <div className="section-title">
+            <h2>AI Football Coach</h2>
+            <p>{geminiBusy ? 'Thinking...' : 'Player picks and football answers'}</p>
+          </div>
+          <div className="gemini-suggestions" aria-label="AI coach suggestions">
+            {GEMINI_SUGGESTIONS.map((suggestion) => (
+              <button
+                key={suggestion}
+                disabled={geminiBusy}
+                onClick={() => void askGemini(undefined, suggestion)}
+                type="button"
+              >
+                {suggestion}
+              </button>
+            ))}
+          </div>
+          <div className="gemini-thread" aria-live="polite">
+            {geminiMessages.length === 0 ? (
+              <p className="gemini-empty">Ask for player recommendations, tactics, weak spots, or any football question.</p>
+            ) : (
+              geminiMessages.map((message, index) => (
+                <p key={`${message.role}-${index}`} className={`gemini-message ${message.role}`}>
+                  <strong>{message.role === 'user' ? 'You' : 'Gemini'}</strong>
+                  {message.text}
+                </p>
+              ))
+            )}
+          </div>
+          {geminiError && <p className="gemini-error">{geminiError}</p>}
+          <form className="gemini-form" onSubmit={askGemini}>
+            <input
+              value={geminiPrompt}
+              onChange={(event) => setGeminiPrompt(event.target.value)}
+              placeholder="Ask about players, tactics, rules, or football history"
+            />
+            <button disabled={geminiBusy || !geminiPrompt.trim()} type="submit">
+              {geminiBusy ? 'Asking...' : 'Ask'}
+            </button>
+          </form>
+        </section>
+      )}
 
       <section className="panel year-panel">
         <div className="section-title">
@@ -2088,6 +2227,19 @@ export default function App() {
               </button>
             );
           })}
+        </div>
+        <div className="bottom-actions">
+          <span>
+            <strong>{selectedPlayers.length}/{REQUIRED_PLAYERS} {copy.players}</strong>
+            <em>{coinsLeft.toLocaleString()} {copy.coinsLeft}</em>
+          </span>
+          <button className="save-button" onClick={saveProgress} disabled={saving} type="button">
+            {saving ? 'Saving...' : 'Save'}
+          </button>
+          <button className="start-over" onClick={startOver} type="button">
+            {copy.startOver}
+          </button>
+          {saveMessage && <p>{saveMessage}</p>}
         </div>
       </section>
       </main>
