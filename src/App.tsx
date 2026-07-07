@@ -39,6 +39,7 @@ type LineFilter = 'ALL' | Line;
 type Tactic = '4-3-3' | '4-4-2' | '3-5-2' | '4-2-3-1' | '5-3-2';
 type MatchStyle = 'balanced' | 'attacking' | 'defensive';
 type PitchDesign = 'classic' | 'neon' | 'royal' | 'sunset';
+type BackgroundDesign = 'clean' | 'stadium' | 'night' | 'confetti';
 type GeminiRole = 'user' | 'assistant';
 
 type GeminiMessage = {
@@ -189,6 +190,24 @@ const PITCH_DESIGNS: Record<PitchDesign, { title: string; colors: [string, strin
   sunset: {
     title: 'Sunset heat',
     colors: ['#b9362d', '#6d1f5a', '#fff0be', '#39c56f'],
+  },
+};
+const BACKGROUND_DESIGNS: Record<BackgroundDesign, { title: string; colors: [string, string, string] }> = {
+  clean: {
+    title: 'Clean white',
+    colors: ['#ffffff', '#f5f5f5', '#111111'],
+  },
+  stadium: {
+    title: 'Stadium green',
+    colors: ['#eaf8ef', '#c8ebd5', '#0f7a45'],
+  },
+  night: {
+    title: 'Night match',
+    colors: ['#111827', '#1f2937', '#54f0ff'],
+  },
+  confetti: {
+    title: 'Cup confetti',
+    colors: ['#fff8dc', '#ffe1e1', '#d30005'],
   },
 };
 
@@ -1276,6 +1295,7 @@ export default function App() {
   const [edition, setEdition] = useState<Edition>('worldCup');
   const [tactic, setTactic] = useState<Tactic>('4-3-3');
   const [pitchDesign, setPitchDesign] = useState<PitchDesign>('classic');
+  const [backgroundDesign, setBackgroundDesign] = useState<BackgroundDesign>('clean');
   const [activeFormationSlot, setActiveFormationSlot] = useState<string | null>(null);
   const [lineup, setLineup] = useState<Record<string, string>>({});
   const [countries, setCountries] = useState<string[]>([]);
@@ -1331,6 +1351,13 @@ export default function App() {
   } as CSSProperties;
   const selectedLogo = logos[year];
   const selectedDesign = PITCH_DESIGNS[pitchDesign];
+  const selectedBackground = BACKGROUND_DESIGNS[backgroundDesign];
+  const appStyle = {
+    ...themeStyle,
+    '--app-bg-a': selectedBackground.colors[0],
+    '--app-bg-b': selectedBackground.colors[1],
+    '--app-bg-c': selectedBackground.colors[2],
+  } as CSSProperties;
   const playerPool = useMemo(
     () =>
       countries.flatMap((country) => {
@@ -2124,8 +2151,30 @@ export default function App() {
             }}
             type="button"
           >
+            Help
+          </button>
+          <button
+            onClick={() => {
+              setTutorialOpen(true);
+              setSideMenuOpen(false);
+            }}
+            type="button"
+          >
             Tutorial
           </button>
+          <div className="side-menu-group">
+            <strong>Background</strong>
+            {(Object.keys(BACKGROUND_DESIGNS) as BackgroundDesign[]).map((design) => (
+              <button
+                key={design}
+                className={design === backgroundDesign ? 'active' : ''}
+                onClick={() => setBackgroundDesign(design)}
+                type="button"
+              >
+                {BACKGROUND_DESIGNS[design].title}
+              </button>
+            ))}
+          </div>
           <button
             onClick={() => {
               setGeminiOpen((open) => !open);
@@ -2189,7 +2238,7 @@ export default function App() {
       <button className="scroll-top-button" onClick={scrollToTop} type="button">
         Top
       </button>
-      <main className={`app-shell theme-${year}`} style={themeStyle}>
+      <main className={`app-shell game-shell theme-${year}`} style={appStyle}>
       <section className="hero">
         {selectedLogo && <img className="hero-logo" src={selectedLogo} alt="" />}
         <div>
@@ -2297,6 +2346,9 @@ export default function App() {
           </button>
           <button className="tutorial-button" onClick={() => setTutorialOpen(true)} type="button">
             Tutorial
+          </button>
+          <button className="help-button" onClick={() => setTutorialOpen(true)} type="button">
+            Help
           </button>
           <button
             className={geminiOpen ? 'gemini-button active' : 'gemini-button'}
@@ -2409,6 +2461,34 @@ export default function App() {
           ))}
         </div>
         <p className="tactic-read">{TACTICS[tactic].text}</p>
+        <div className="section-title design-title">
+          <h3>Background</h3>
+          <p>{selectedBackground.title}</p>
+        </div>
+        <div className="design-picker" aria-label="Choose background design">
+          {(Object.keys(BACKGROUND_DESIGNS) as BackgroundDesign[]).map((design) => (
+            <button
+              key={design}
+              className={design === backgroundDesign ? 'design-choice active' : 'design-choice'}
+              onClick={() => setBackgroundDesign(design)}
+              type="button"
+            >
+              <span
+                className="design-swatch"
+                style={{
+                  '--swatch-a': BACKGROUND_DESIGNS[design].colors[0],
+                  '--swatch-b': BACKGROUND_DESIGNS[design].colors[1],
+                  '--swatch-c': BACKGROUND_DESIGNS[design].colors[2],
+                } as CSSProperties}
+              />
+              <strong>{BACKGROUND_DESIGNS[design].title}</strong>
+            </button>
+          ))}
+        </div>
+        <div className="section-title design-title">
+          <h3>Pitch</h3>
+          <p>{selectedDesign.title}</p>
+        </div>
         <div className="design-picker" aria-label="Choose pitch design">
           {(Object.keys(PITCH_DESIGNS) as PitchDesign[]).map((design) => (
             <button

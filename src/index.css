@@ -34,6 +34,22 @@ button {
   padding: 18px 0 48px;
 }
 
+.game-shell {
+  position: relative;
+  isolation: isolate;
+}
+
+.game-shell::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(circle at 8% 12%, color-mix(in srgb, var(--app-bg-c) 18%, transparent), transparent 26%),
+    radial-gradient(circle at 92% 18%, color-mix(in srgb, var(--app-bg-c) 14%, transparent), transparent 24%),
+    linear-gradient(135deg, var(--app-bg-a), var(--app-bg-b));
+}
+
 .screamer {
   position: fixed;
   inset: 0;
@@ -643,6 +659,7 @@ h2 {
 .everything-button,
 .gemini-button,
 .tutorial-button,
+.help-button,
 .sign-out {
   width: 100%;
   min-height: 36px;
@@ -673,6 +690,11 @@ h2 {
 .tutorial-button {
   color: var(--ink);
   background: #f8df3a;
+}
+
+.help-button {
+  color: white;
+  background: #0f7a45;
 }
 
 .gemini-button.active {
@@ -795,6 +817,26 @@ h2 {
 .side-menu button:disabled {
   cursor: not-allowed;
   opacity: 0.58;
+}
+
+.side-menu-group {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  background: white;
+}
+
+.side-menu-group strong {
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.side-menu-group button.active {
+  color: white;
+  border-color: var(--ink);
+  background: var(--ink);
 }
 
 .panel {
@@ -929,6 +971,17 @@ h2 {
   color: var(--muted);
   font-weight: 800;
   line-height: 1.35;
+}
+
+.design-title {
+  margin-top: 16px;
+  margin-bottom: 8px;
+}
+
+.design-title h3 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.2;
 }
 
 .design-picker {
