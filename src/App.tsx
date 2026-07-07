@@ -37,6 +37,8 @@ type AuthMode = 'signin' | 'signup';
 type LeaderboardFilter = 'all' | Edition;
 type LineFilter = 'ALL' | Line;
 type Tactic = '4-3-3' | '4-4-2' | '3-5-2' | '4-2-3-1' | '5-3-2';
+type MatchStyle = 'balanced' | 'attacking' | 'defensive';
+type PitchDesign = 'classic' | 'neon' | 'royal' | 'sunset';
 type GeminiRole = 'user' | 'assistant';
 
 type GeminiMessage = {
@@ -47,6 +49,20 @@ type GeminiMessage = {
 type GeminiResponse = {
   text?: string;
   error?: string;
+};
+
+type MatchOpponent = {
+  name: string;
+  type: 'online' | 'bot';
+  score: number;
+};
+
+type MatchResult = {
+  opponent: MatchOpponent;
+  style: MatchStyle;
+  myGoals: number;
+  opponentGoals: number;
+  events: string[];
 };
 
 type Profile = {
@@ -87,6 +103,14 @@ type AdminPlayer = {
   password_status: string;
   created_at: string;
   updated_at: string | null;
+};
+
+type FormationSlot = {
+  id: string;
+  line: Line;
+  label: string;
+  x: number;
+  y: number;
 };
 
 const COIN_BUDGET = 15000;
@@ -135,9 +159,65 @@ const GEMINI_SUGGESTIONS = [
   'Explain false nine in simple words',
   'Which formation fits this squad?',
 ];
+const MATCH_STYLES: Record<MatchStyle, { title: string; text: string }> = {
+  balanced: {
+    title: 'Balanced',
+    text: 'Keep shape and pick the right moments.',
+  },
+  attacking: {
+    title: 'Attack',
+    text: 'Push numbers forward and chase goals.',
+  },
+  defensive: {
+    title: 'Defend',
+    text: 'Stay compact and play on the counter.',
+  },
+};
+const PITCH_DESIGNS: Record<PitchDesign, { title: string; colors: [string, string, string, string] }> = {
+  classic: {
+    title: 'Classic grass',
+    colors: ['#0f7a45', '#0b5d35', '#ffffff', '#d30005'],
+  },
+  neon: {
+    title: 'Neon night',
+    colors: ['#10182f', '#0b1022', '#54f0ff', '#f8df3a'],
+  },
+  royal: {
+    title: 'Royal cup',
+    colors: ['#273c8f', '#182452', '#f6d35b', '#e84545'],
+  },
+  sunset: {
+    title: 'Sunset heat',
+    colors: ['#b9362d', '#6d1f5a', '#fff0be', '#39c56f'],
+  },
+};
+
+function spreadSlots(line: Line, count: number, y: number): FormationSlot[] {
+  return Array.from({ length: count }, (_, index) => ({
+    id: `${line}-${index + 1}`,
+    line,
+    label: `${line} ${index + 1}`,
+    x: ((index + 1) * 100) / (count + 1),
+    y,
+  }));
+}
+
+function formationSlots(tactic: Tactic): FormationSlot[] {
+  const lines = TACTICS[tactic].lines;
+  return [
+    { id: 'GK-1', line: 'GK', label: 'GK', x: 50, y: 91 },
+    ...spreadSlots('DEF', lines.DEF, 72),
+    ...spreadSlots('MID', lines.MID, 47),
+    ...spreadSlots('ATT', lines.ATT, 18),
+  ];
+}
 
 function cleanGeminiText(text: string) {
   return text.replace(/\*/g, '"');
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
 }
 
 const COPY = {
@@ -1027,41 +1107,79 @@ function Screamer({ kind }: { kind: ScreamerKind | null }) {
 }
 
 function TutorialModal({
+  lang,
   onClose,
   onNeverShowAgain,
 }: {
+  lang: Lang;
   onClose: () => void;
   onNeverShowAgain: () => void;
 }) {
+  const [tutorialLang, setTutorialLang] = useState<Lang>(lang);
+  const copy = {
+    en: {
+      eyebrow: 'Kickoff guide',
+      title: 'Build your monster club.',
+      steps: [
+        'Pick 3 to 5 countries.',
+        'Draft 28 players while staying inside the coin budget.',
+        'Balance GK, DEF, MID, and ATT to unlock a stronger verdict.',
+        'Save your club to enter the Best Clubs leaderboard.',
+      ],
+      start: 'Start playing',
+      never: 'Never show this again',
+    },
+    ru: {
+      eyebrow: 'Гайд перед стартом',
+      title: 'Собери монстр-клуб.',
+      steps: [
+        'Выбери от 3 до 5 стран.',
+        'Набери 28 игроков и не выйди за бюджет монет.',
+        'Сбалансируй GK, DEF, MID и ATT, чтобы получить сильнее вердикт.',
+        'Сохрани клуб, чтобы попасть в таблицу Best Clubs.',
+      ],
+      start: 'Начать играть',
+      never: 'Больше не показывать',
+    },
+  }[tutorialLang];
+
   return (
     <div className="tutorial-overlay" role="dialog" aria-modal="true" aria-labelledby="tutorial-title">
       <section className="tutorial-card">
-        <p className="eyebrow">Kickoff guide</p>
-        <h2 id="tutorial-title">Build your monster club.</h2>
+        <div className="tutorial-topline">
+          <p className="eyebrow">{copy.eyebrow}</p>
+          <div className="tutorial-lang-toggle" aria-label="Tutorial language">
+            <button
+              className={tutorialLang === 'en' ? 'active' : ''}
+              onClick={() => setTutorialLang('en')}
+              type="button"
+            >
+              EN
+            </button>
+            <button
+              className={tutorialLang === 'ru' ? 'active' : ''}
+              onClick={() => setTutorialLang('ru')}
+              type="button"
+            >
+              RU
+            </button>
+          </div>
+        </div>
+        <h2 id="tutorial-title">{copy.title}</h2>
         <div className="tutorial-steps">
-          <span>
-            <strong>1</strong>
-            Pick 3 to 5 countries.
-          </span>
-          <span>
-            <strong>2</strong>
-            Draft 28 players while staying inside the coin budget.
-          </span>
-          <span>
-            <strong>3</strong>
-            Balance GK, DEF, MID, and ATT to unlock a stronger verdict.
-          </span>
-          <span>
-            <strong>4</strong>
-            Save your club to enter the Best Clubs leaderboard.
-          </span>
+          {copy.steps.map((step, index) => (
+            <span key={step}>
+              <strong>{index + 1}</strong>
+              {step}
+            </span>
+          ))}
         </div>
         <div className="tutorial-actions">
           <button className="save-button" onClick={onClose} type="button">
-            Start playing
+            {copy.start}
           </button>
           <button className="sign-out" onClick={onNeverShowAgain} type="button">
-            Never show this again
+            {copy.never}
           </button>
         </div>
       </section>
@@ -1157,6 +1275,9 @@ export default function App() {
   const [lang, setLang] = useState<Lang>('en');
   const [edition, setEdition] = useState<Edition>('worldCup');
   const [tactic, setTactic] = useState<Tactic>('4-3-3');
+  const [pitchDesign, setPitchDesign] = useState<PitchDesign>('classic');
+  const [activeFormationSlot, setActiveFormationSlot] = useState<string | null>(null);
+  const [lineup, setLineup] = useState<Record<string, string>>({});
   const [countries, setCountries] = useState<string[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [clubName, setClubName] = useState('');
@@ -1167,6 +1288,7 @@ export default function App() {
   const [leaderboardFilter, setLeaderboardFilter] = useState<LeaderboardFilter>('all');
   const [musicVolume, setMusicVolume] = useState(0.36);
   const [screamersEnabled, setScreamersEnabled] = useState(true);
+  const [sideMenuOpen, setSideMenuOpen] = useState(false);
   const [squadsByYear, setSquadsByYear] = useState<Record<number, SquadMap>>({});
   const [globalSquads, setGlobalSquads] = useState<SquadMap>({});
   const [photos, setPhotos] = useState<PhotoMap>({});
@@ -1192,6 +1314,8 @@ export default function App() {
   const [geminiMessages, setGeminiMessages] = useState<GeminiMessage[]>([]);
   const [geminiBusy, setGeminiBusy] = useState(false);
   const [geminiError, setGeminiError] = useState('');
+  const [matchStyle, setMatchStyle] = useState<MatchStyle>('balanced');
+  const [matchResult, setMatchResult] = useState<MatchResult | null>(null);
   const screamerTurnRef = useRef<ScreamerKind>('sixtySeven');
 
   const qualifiedCountries = WORLD_CUPS[year];
@@ -1206,6 +1330,7 @@ export default function App() {
     '--theme-c': theme.colors[2],
   } as CSSProperties;
   const selectedLogo = logos[year];
+  const selectedDesign = PITCH_DESIGNS[pitchDesign];
   const playerPool = useMemo(
     () =>
       countries.flatMap((country) => {
@@ -1228,6 +1353,21 @@ export default function App() {
     });
   }, [lineFilter, maxCostFilter, playerPool, playerSearch]);
   const selectedPlayers = playerPool.filter((player) => selectedIds.includes(player.id));
+  const selectedPlayerById = useMemo(
+    () => new Map(selectedPlayers.map((player) => [player.id, player])),
+    [selectedPlayers],
+  );
+  const slots = useMemo(() => formationSlots(tactic), [tactic]);
+  const slotById = useMemo(() => new Map(slots.map((slot) => [slot.id, slot])), [slots]);
+  const starterIds = new Set(Object.values(lineup));
+  const benchPlayers = selectedPlayers.filter((player) => !starterIds.has(player.id));
+  const activeSlot = activeFormationSlot ? slotById.get(activeFormationSlot) ?? null : null;
+  const activeSlotPlayer = activeFormationSlot && lineup[activeFormationSlot]
+    ? selectedPlayerById.get(lineup[activeFormationSlot]) ?? null
+    : null;
+  const eligibleSlotPlayers = activeSlot
+    ? selectedPlayers.filter((player) => player.line === activeSlot.line)
+    : [];
   const selectedCost = selectedPlayers.reduce((sum, player) => sum + player.cost, 0);
   const coinsLeft = COIN_BUDGET - selectedCost;
   const score = squadScore(selectedPlayers);
@@ -1238,6 +1378,22 @@ export default function App() {
     if (leaderboardFilter === 'all') return true;
     return entry.edition === leaderboardFilter;
   });
+  const matchOpponent = useMemo<MatchOpponent>(() => {
+    const onlineEntry = leaderboard.find((entry) => entry.player_id !== profile?.id);
+    if (onlineEntry) {
+      return {
+        name: onlineEntry.club_name || `@${onlineEntry.username}`,
+        type: 'online',
+        score: Math.max(onlineEntry.score, 1000),
+      };
+    }
+
+    return {
+      name: `${year} Bot XI`,
+      type: 'bot',
+      score: Math.max(7600, Math.round((score || 8200) * 0.94)),
+    };
+  }, [leaderboard, profile?.id, score, year]);
   const lineCounts = selectedPlayers.reduce<Record<Line, number>>(
     (counts, player) => ({ ...counts, [player.line]: counts[player.line] + 1 }),
     { GK: 0, DEF: 0, MID: 0, ATT: 0 },
@@ -1246,6 +1402,12 @@ export default function App() {
     .filter((line) => lineCounts[line] < LINE_REQUIREMENTS[line])
     .map((line) => `${LINE_REQUIREMENTS[line] - lineCounts[line]} ${line}`)
     .join(', ');
+  const pitchStyle = {
+    '--pitch-a': selectedDesign.colors[0],
+    '--pitch-b': selectedDesign.colors[1],
+    '--pitch-line': selectedDesign.colors[2],
+    '--pitch-accent': selectedDesign.colors[3],
+  } as CSSProperties;
 
   const {
     musicOn,
@@ -1267,6 +1429,18 @@ export default function App() {
     const intervalId = window.setInterval(triggerScreamer, SCREAMER_INTERVAL_MS);
     return () => window.clearInterval(intervalId);
   }, [screamersEnabled]);
+
+  useEffect(() => {
+    const allowedSlotIds = new Set(slots.map((slot) => slot.id));
+    const allowedPlayerIds = new Set(selectedIds);
+
+    setLineup((current) => Object.fromEntries(
+      Object.entries(current).filter(([slotId, playerId]) => (
+        allowedSlotIds.has(slotId) && allowedPlayerIds.has(playerId)
+      )),
+    ));
+    setActiveFormationSlot((slotId) => (slotId && allowedSlotIds.has(slotId) ? slotId : null));
+  }, [selectedIds, slots]);
 
   async function loadLeaderboard() {
     const { data, error } = await supabase
@@ -1482,6 +1656,8 @@ export default function App() {
     setYear(nextYear);
     setCountries([]);
     setSelectedIds([]);
+    setLineup({});
+    setActiveFormationSlot(null);
     setSaveMessage('');
   }
 
@@ -1489,13 +1665,23 @@ export default function App() {
     setEdition(nextEdition);
     setCountries([]);
     setSelectedIds([]);
+    setLineup({});
+    setActiveFormationSlot(null);
     setSaveMessage('');
   }
 
   function startOver() {
     setCountries([]);
     setSelectedIds([]);
+    setLineup({});
+    setActiveFormationSlot(null);
     setSaveMessage('');
+  }
+
+  function chooseTactic(nextTactic: Tactic) {
+    setTactic(nextTactic);
+    setActiveFormationSlot(null);
+    setLineup({});
   }
 
   function toggleCountry(country: string) {
@@ -1515,6 +1701,9 @@ export default function App() {
   function togglePlayer(id: string) {
     if (selectedIds.includes(id)) {
       setSelectedIds(selectedIds.filter((item) => item !== id));
+      setLineup((current) => Object.fromEntries(
+        Object.entries(current).filter(([, playerId]) => playerId !== id),
+      ));
       setSaveMessage('');
       return;
     }
@@ -1529,6 +1718,32 @@ export default function App() {
       setSelectedIds([...selectedIds, id]);
       setSaveMessage('');
     }
+  }
+
+  function assignPlayerToSlot(slotId: string, playerId: string) {
+    const slot = slotById.get(slotId);
+    const player = selectedPlayerById.get(playerId);
+
+    if (!slot || !player || player.line !== slot.line) return;
+
+    setLineup((current) => {
+      const next = Object.fromEntries(
+        Object.entries(current).filter(([currentSlotId, currentPlayerId]) => (
+          currentSlotId !== slotId && currentPlayerId !== playerId
+        )),
+      );
+      return { ...next, [slotId]: playerId };
+    });
+    setActiveFormationSlot(null);
+  }
+
+  function clearFormationSlot(slotId: string) {
+    setLineup((current) => {
+      const next = { ...current };
+      delete next[slotId];
+      return next;
+    });
+    setActiveFormationSlot(null);
   }
 
   async function handleAuthSubmit(event: FormEvent) {
@@ -1746,6 +1961,55 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
+  function scrollToSection(sectionId: string) {
+    document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setSideMenuOpen(false);
+  }
+
+  function playMatch() {
+    const attack = selectedPlayers.reduce((sum, player) => sum + player.attack, 0);
+    const midfield = selectedPlayers.reduce((sum, player) => sum + player.midfield, 0);
+    const defense = selectedPlayers.reduce((sum, player) => sum + player.defense, 0);
+    const playerCount = Math.max(selectedPlayers.length, 1);
+    const tacticLines = TACTICS[tactic].lines;
+    const tacticBalance = tacticLines.ATT * 18 + tacticLines.MID * 14 + tacticLines.DEF * 12;
+    const styleAttack = matchStyle === 'attacking' ? 1.14 : matchStyle === 'defensive' ? 0.88 : 1;
+    const styleDefense = matchStyle === 'defensive' ? 1.14 : matchStyle === 'attacking' ? 0.9 : 1;
+    const myAttackPower = (attack / playerCount) * styleAttack + (midfield / playerCount) * 0.32 + tacticBalance;
+    const myDefensePower = (defense / playerCount) * styleDefense + (midfield / playerCount) * 0.28 + tacticLines.DEF * 22;
+    const opponentAttackPower = matchOpponent.score / 135 + (matchOpponent.type === 'online' ? 14 : 0);
+    const opponentDefensePower = matchOpponent.score / 145 + (matchOpponent.type === 'online' ? 12 : 0);
+    const myExpected = clamp(1.25 + (myAttackPower - opponentDefensePower) / 78 + Math.random() * 1.35, 0, 5.2);
+    const opponentExpected = clamp(1.05 + (opponentAttackPower - myDefensePower) / 82 + Math.random() * 1.2, 0, 5);
+    const myGoals = clamp(Math.round(myExpected), 0, 6);
+    const opponentGoals = clamp(Math.round(opponentExpected), 0, 6);
+    const bestAttacker = [...selectedPlayers].sort((a, b) => b.attack - a.attack)[0]?.name ?? 'Your striker';
+    const bestMidfielder = [...selectedPlayers].sort((a, b) => b.midfield - a.midfield)[0]?.name ?? 'Your midfield';
+    const bestDefender = [...selectedPlayers].sort((a, b) => b.defense - a.defense)[0]?.name ?? 'Your defense';
+    const events = [
+      `12' ${bestMidfielder} sets the tempo in a ${tactic}.`,
+      myGoals > 0
+        ? `28' ${bestAttacker} breaks through and scores.`
+        : `28' ${matchOpponent.name} blocks your best chance.`,
+      opponentGoals > 0
+        ? `51' ${matchOpponent.name} punishes a loose moment.`
+        : `51' ${bestDefender} kills a dangerous counter.`,
+      myGoals > opponentGoals
+        ? `83' Your ${MATCH_STYLES[matchStyle].title.toLowerCase()} plan closes the match.`
+        : myGoals === opponentGoals
+          ? "83' Both teams trade pressure, but nobody finds the winner."
+          : `83' ${matchOpponent.name} survives the late push.`,
+    ];
+
+    setMatchResult({
+      opponent: matchOpponent,
+      style: matchStyle,
+      myGoals,
+      opponentGoals,
+      events,
+    });
+  }
+
   if (!profile) {
     return (
       <>
@@ -1820,9 +2084,98 @@ export default function App() {
       <Screamer kind={screamerKind} />
       {tutorialOpen && (
         <TutorialModal
+          lang={lang}
           onClose={() => setTutorialOpen(false)}
           onNeverShowAgain={neverShowTutorialAgain}
         />
+      )}
+      <button
+        className={sideMenuOpen ? 'side-menu-toggle active' : 'side-menu-toggle'}
+        onClick={() => setSideMenuOpen((open) => !open)}
+        type="button"
+      >
+        Menu
+      </button>
+      {sideMenuOpen && (
+        <nav className="side-menu" aria-label="Game menu">
+          <div className="side-menu-head">
+            <strong>Menu</strong>
+            <button onClick={() => setSideMenuOpen(false)} type="button">Close</button>
+          </div>
+          <button
+            onClick={() => {
+              scrollToTop();
+              setSideMenuOpen(false);
+            }}
+            type="button"
+          >
+            Top
+          </button>
+          <button onClick={() => scrollToSection('tactics')} type="button">Tactic and design</button>
+          <button onClick={() => scrollToSection('match-center')} type="button">Match center</button>
+          <button onClick={() => scrollToSection('countries')} type="button">Countries</button>
+          <button onClick={() => scrollToSection('my-team')} type="button">My team</button>
+          <button onClick={() => scrollToSection('leaderboard')} type="button">Best clubs</button>
+          <button onClick={() => scrollToSection('player-draft')} type="button">Player draft</button>
+          <button
+            onClick={() => {
+              setGeminiOpen((open) => !open);
+              setSideMenuOpen(false);
+            }}
+            type="button"
+          >
+            {geminiOpen ? 'Hide AI coach' : 'AI coach'}
+          </button>
+          <button
+            onClick={() => {
+              toggleMusic();
+              setSideMenuOpen(false);
+            }}
+            type="button"
+          >
+            {musicOn ? 'Turn music off' : 'Turn music on'}
+          </button>
+          <button
+            onClick={() => {
+              void saveProgress();
+              setSideMenuOpen(false);
+            }}
+            disabled={saving}
+            type="button"
+          >
+            {saving ? 'Saving...' : 'Save club'}
+          </button>
+          <button
+            onClick={() => {
+              startOver();
+              setSideMenuOpen(false);
+            }}
+            type="button"
+          >
+            Start over
+          </button>
+          {isSigmaAdmin && (
+            <button
+              onClick={() => {
+                void loadEverything();
+                setSideMenuOpen(false);
+              }}
+              disabled={everythingLoading}
+              type="button"
+            >
+              {everythingLoading ? 'Loading...' : 'Everything'}
+            </button>
+          )}
+          <button
+            onClick={() => {
+              void signOut();
+              setSideMenuOpen(false);
+            }}
+            type="button"
+          >
+            Sign out
+          </button>
+        </nav>
       )}
       <button className="scroll-top-button" onClick={scrollToTop} type="button">
         Top
@@ -2023,7 +2376,7 @@ export default function App() {
         </div>
       </section>
 
-      <section className="panel tactics-panel">
+      <section className="panel tactics-panel" id="tactics">
         <div className="section-title">
           <h2>Tactic</h2>
           <p>{TACTICS[tactic].title}</p>
@@ -2033,7 +2386,7 @@ export default function App() {
             <button
               key={item}
               className={item === tactic ? 'tactic-choice active' : 'tactic-choice'}
-              onClick={() => setTactic(item)}
+              onClick={() => chooseTactic(item)}
               type="button"
             >
               <strong>{item}</strong>
@@ -2044,10 +2397,176 @@ export default function App() {
           ))}
         </div>
         <p className="tactic-read">{TACTICS[tactic].text}</p>
+        <div className="design-picker" aria-label="Choose pitch design">
+          {(Object.keys(PITCH_DESIGNS) as PitchDesign[]).map((design) => (
+            <button
+              key={design}
+              className={design === pitchDesign ? 'design-choice active' : 'design-choice'}
+              onClick={() => setPitchDesign(design)}
+              type="button"
+            >
+              <span
+                className="design-swatch"
+                style={{
+                  '--swatch-a': PITCH_DESIGNS[design].colors[0],
+                  '--swatch-b': PITCH_DESIGNS[design].colors[1],
+                  '--swatch-c': PITCH_DESIGNS[design].colors[3],
+                } as CSSProperties}
+              />
+              <strong>{PITCH_DESIGNS[design].title}</strong>
+            </button>
+          ))}
+        </div>
+        <div className="formation-lab">
+          <div className="formation-pitch" style={pitchStyle}>
+            <div className="pitch-mark center-circle" />
+            <div className="pitch-mark penalty top" />
+            <div className="pitch-mark penalty bottom" />
+            {slots.map((slot) => {
+              const player = lineup[slot.id] ? selectedPlayerById.get(lineup[slot.id]) : null;
+              return (
+                <button
+                  key={slot.id}
+                  className={slot.id === activeFormationSlot ? 'formation-slot active' : 'formation-slot'}
+                  onClick={() => setActiveFormationSlot(slot.id)}
+                  style={{ left: `${slot.x}%`, top: `${slot.y}%` }}
+                  type="button"
+                >
+                  <span>{player?.name ?? slot.label}</span>
+                  <em>{slot.line}</em>
+                </button>
+              );
+            })}
+          </div>
+          <aside className="lineup-panel">
+            <div className="coach-box">
+              <span>Coach</span>
+              <strong>{profile.username}</strong>
+              <em>{clubName.trim() || clubNameForUsername(profile.username)}</em>
+            </div>
+            <div className="slot-picker">
+              <div className="section-title">
+                <h3>{activeSlot ? activeSlot.label : 'Pick a spot'}</h3>
+                <p>{activeSlotPlayer?.name ?? 'Choose a formation slot'}</p>
+              </div>
+              {activeSlot ? (
+                <>
+                  <div className="slot-player-grid">
+                    {eligibleSlotPlayers.length === 0 ? (
+                      <p className="leaderboard-empty">Draft a {activeSlot.line} player first.</p>
+                    ) : (
+                      eligibleSlotPlayers.map((player) => (
+                        <button
+                          key={player.id}
+                          className={lineup[activeSlot.id] === player.id ? 'slot-player active' : 'slot-player'}
+                          onClick={() => assignPlayerToSlot(activeSlot.id, player.id)}
+                          type="button"
+                        >
+                          <span>{player.name}</span>
+                          <em>OVR {player.overall}</em>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                  {activeSlotPlayer && (
+                    <button className="clear-slot" onClick={() => clearFormationSlot(activeSlot.id)} type="button">
+                      Move to bench
+                    </button>
+                  )}
+                </>
+              ) : (
+                <p className="lineup-help">Click a position on the pitch, then choose one of your drafted players.</p>
+              )}
+            </div>
+            <div className="bench-box">
+              <div className="section-title">
+                <h3>Bench</h3>
+                <p>{benchPlayers.length} players</p>
+              </div>
+              {benchPlayers.length === 0 ? (
+                <p className="leaderboard-empty">Assigned players leave the bench.</p>
+              ) : (
+                <div className="bench-list">
+                  {benchPlayers.map((player) => (
+                    <button
+                      key={player.id}
+                      disabled={!activeSlot || activeSlot.line !== player.line}
+                      onClick={() => activeSlot && assignPlayerToSlot(activeSlot.id, player.id)}
+                      type="button"
+                    >
+                      <span>{player.name}</span>
+                      <em>{player.line}</em>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section className="panel match-panel" id="match-center">
+        <div className="section-title">
+          <h2>Match Center</h2>
+          <p>{matchOpponent.type === 'online' ? 'Online opponent found' : 'Bot opponent ready'}</p>
+        </div>
+        <div className="match-board">
+          <div className="match-club">
+            <span>Your Club</span>
+            <strong>{clubName.trim() || clubNameForUsername(profile.username)}</strong>
+            <em>{score.toLocaleString()} power</em>
+          </div>
+          <div className="match-score">
+            {matchResult ? `${matchResult.myGoals} - ${matchResult.opponentGoals}` : 'VS'}
+          </div>
+          <div className="match-club opponent">
+            <span>{matchOpponent.type === 'online' ? 'Online Player' : 'Bot'}</span>
+            <strong>{matchOpponent.name}</strong>
+            <em>{matchOpponent.score.toLocaleString()} power</em>
+          </div>
+        </div>
+        <div className="match-style-grid" role="radiogroup" aria-label="Choose match style">
+          {(Object.keys(MATCH_STYLES) as MatchStyle[]).map((style) => (
+            <button
+              key={style}
+              className={style === matchStyle ? 'match-style active' : 'match-style'}
+              onClick={() => setMatchStyle(style)}
+              type="button"
+            >
+              <strong>{MATCH_STYLES[style].title}</strong>
+              <span>{MATCH_STYLES[style].text}</span>
+            </button>
+          ))}
+        </div>
+        <button
+          className="kickoff-button"
+          disabled={selectedPlayers.length === 0}
+          onClick={playMatch}
+          type="button"
+        >
+          {selectedPlayers.length === 0 ? 'Pick players first' : 'Kick off'}
+        </button>
+        {matchResult && (
+          <div className="match-report">
+            <strong>
+              {matchResult.myGoals > matchResult.opponentGoals
+                ? 'You win'
+                : matchResult.myGoals === matchResult.opponentGoals
+                  ? 'Draw'
+                  : 'You lose'}
+            </strong>
+            <span>{MATCH_STYLES[matchResult.style].title} vs {matchResult.opponent.name}</span>
+            <ol>
+              {matchResult.events.map((event) => (
+                <li key={event}>{event}</li>
+              ))}
+            </ol>
+          </div>
+        )}
       </section>
 
       <section className="layout">
-        <div className="panel">
+        <div className="panel" id="countries">
           <div className="section-title">
             <h2>{copy.countries}</h2>
             <p>
@@ -2102,7 +2621,7 @@ export default function App() {
               </span>
             ))}
           </div>
-          <div className="my-team-card">
+          <div className="my-team-card" id="my-team">
             <div className="section-title">
               <h2>My Team</h2>
               <p>{selectedPlayers.length}/{REQUIRED_PLAYERS}</p>
@@ -2120,7 +2639,7 @@ export default function App() {
               </div>
             )}
           </div>
-          <div className="leaderboard-card">
+          <div className="leaderboard-card" id="leaderboard">
             <div className="section-title">
               <h2>Best Clubs</h2>
               <select
@@ -2194,7 +2713,7 @@ export default function App() {
         </section>
       )}
 
-      <section className="panel players-panel">
+      <section className="panel players-panel" id="player-draft">
           <div className="section-title">
             <h2>{copy.draft}</h2>
             <p>
