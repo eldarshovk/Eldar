@@ -2119,6 +2119,15 @@ export default function App() {
           <button onClick={() => scrollToSection('player-draft')} type="button">Player draft</button>
           <button
             onClick={() => {
+              setTutorialOpen(true);
+              setSideMenuOpen(false);
+            }}
+            type="button"
+          >
+            Tutorial
+          </button>
+          <button
+            onClick={() => {
               setGeminiOpen((open) => !open);
               setSideMenuOpen(false);
             }}
@@ -2285,6 +2294,9 @@ export default function App() {
           <span className="last-saved">Last saved: {formatSavedAt(lastSavedAt)}</span>
           <button className="start-over" onClick={startOver} type="button">
             {copy.startOver}
+          </button>
+          <button className="tutorial-button" onClick={() => setTutorialOpen(true)} type="button">
+            Tutorial
           </button>
           <button
             className={geminiOpen ? 'gemini-button active' : 'gemini-button'}

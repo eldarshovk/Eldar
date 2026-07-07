@@ -642,6 +642,7 @@ h2 {
 .save-button,
 .everything-button,
 .gemini-button,
+.tutorial-button,
 .sign-out {
   width: 100%;
   min-height: 36px;
@@ -667,6 +668,11 @@ h2 {
 .gemini-button {
   color: white;
   background: #2364aa;
+}
+
+.tutorial-button {
+  color: var(--ink);
+  background: #f8df3a;
 }
 
 .gemini-button.active {
